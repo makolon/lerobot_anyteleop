@@ -40,8 +40,8 @@ class FollowerInterface(abc.ABC):
     def send_joint_positions(self, q: np.ndarray) -> None:
         """Stream a servo joint target (must be in servo mode). Radians."""
 
-    def set_gripper(self, value: float) -> None:
-        """Set gripper opening, normalized ``[0, 1]``. No-op if unsupported."""
+    # Gripper control is handled by a separate, pluggable GripperInterface
+    # (see ``devices.gripper``), since grippers are interchangeable attachments.
 
     # context-manager sugar -------------------------------------------------
     def __enter__(self) -> "FollowerInterface":

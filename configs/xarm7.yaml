@@ -15,8 +15,12 @@ leader:
 follower:
   robot: xarm7
   ip: 192.168.1.185
-  options:
-    use_gripper: true
+  gripper:
+    type: xarm                    # xArm native gripper (shares the arm connection)
+    options: { speed: 2000 }
+    # For a Robotiq 2F-85 on the xArm instead:
+    # type: robotiq
+    # options: { backend: serial, com_port: /dev/ttyUSB0 }
   # home: [0.0, -0.35, 0.0, 0.6, 0.0, 0.95, 0.0]   # override registry home
 
 retarget:

@@ -15,6 +15,7 @@ import h5py  # noqa: E402
 from lerobot_anyteleop.config import TeleopConfig  # noqa: E402
 from lerobot_anyteleop.devices import MultiCameraManager  # noqa: E402
 from lerobot_anyteleop.devices.follower.base import FollowerInterface  # noqa: E402
+from lerobot_anyteleop.devices.gripper.base import GripperInterface  # noqa: E402
 from lerobot_anyteleop.devices.leader.base import LeaderInterface, LeaderState  # noqa: E402
 from lerobot_anyteleop.factory import TeleopSystem, build_pipeline  # noqa: E402
 from lerobot_anyteleop.recording import HDF5Recorder  # noqa: E402
@@ -67,6 +68,21 @@ class FakeFollower(FollowerInterface):
         self._q = np.asarray(q, float).copy()  # perfect tracking
 
 
+class FakeGripper(GripperInterface):
+    def __init__(self):
+        self.commands = []
+
+    def connect(self): ...
+    def disconnect(self): ...
+
+    @property
+    def is_connected(self):
+        return True
+
+    def set_normalized(self, value):
+        self.commands.append(float(value))
+
+
 def _system(tmp_path) -> tuple[TeleopSystem, TeleopConfig]:
     cfg = TeleopConfig.from_dict(
         {
@@ -83,6 +99,7 @@ def _system(tmp_path) -> tuple[TeleopSystem, TeleopConfig]:
     sys = TeleopSystem(
         leader=FakeLeader(get_robot_spec("so101").arm_joint_names),
         follower=FakeFollower(follower_spec.arm_joint_names, home),
+        gripper=FakeGripper(),
         leader_kin=leader_kin,
         follower_kin=follower_kin,
         retargeter=pipeline.retargeter,
@@ -111,3 +128,6 @@ def test_controller_runs_and_records(tmp_path):
         assert f.attrs["num_steps"] == 6
         # follower moved in response to leader motion
         assert np.std(f["action/follower_qpos"][:]) > 1e-4
+
+    # leader gripper (0.5) was forwarded to the gripper device
+    assert sys.gripper.commands and sys.gripper.commands[0] == 0.5

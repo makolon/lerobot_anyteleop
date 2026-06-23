@@ -13,6 +13,7 @@ import numpy as np
 from .config import (
     CameraConfig,
     FollowerConfig,
+    GripperConfig,
     LeaderConfig,
     RecordConfig,
     RetargetConfig,
@@ -20,6 +21,7 @@ from .config import (
 )
 from .devices import FollowerInterface, LeaderInterface, MultiCameraManager
 from .devices.camera.base import CameraInterface
+from .devices.gripper.base import GripperInterface
 from .kinematics import KinematicsModel
 from .recording import HDF5Recorder
 from .retargeting import PoseRetargeter
@@ -31,6 +33,7 @@ from .teleop.pipeline import KinematicRetargetPipeline
 class TeleopSystem:
     leader: LeaderInterface
     follower: FollowerInterface
+    gripper: GripperInterface
     leader_kin: KinematicsModel
     follower_kin: KinematicsModel
     retargeter: PoseRetargeter
@@ -113,6 +116,31 @@ def build_follower_device(cfg: FollowerConfig, spec: RobotSpec) -> FollowerInter
     return cls(ip=cfg.ip, joint_names=spec.arm_joint_names, **cfg.options)
 
 
+def build_gripper(
+    cfg: GripperConfig, follower: FollowerInterface, follower_ip: str | None
+) -> GripperInterface:
+    from .devices.gripper import get_gripper_class
+
+    cls = get_gripper_class(cfg.type)
+    opts = dict(cfg.options)
+    if cfg.type == "none":
+        gripper = cls()
+    elif cfg.type == "xarm":
+        gripper = cls(follower, **opts)            # shares the arm's connection
+    elif cfg.type == "franka":
+        ip = opts.pop("ip", follower_ip)
+        gripper = cls(ip, **opts)
+    elif cfg.type == "robotiq":
+        if opts.get("backend") == "ur" and not opts.get("host"):
+            opts["host"] = follower_ip             # Robotiq on a UR controller
+        gripper = cls(**opts)
+    else:  # pragma: no cover - registry guards this
+        gripper = cls(**opts)
+    if cfg.deadband is not None:
+        gripper.deadband = cfg.deadband
+    return gripper
+
+
 def build_camera(cfg: CameraConfig, seed: int = 0) -> CameraInterface:
     if cfg.backend != "realsense":
         raise ValueError(f"Unknown camera backend {cfg.backend!r} (only 'realsense' is supported).")
@@ -149,9 +177,12 @@ def build_system(cfg: TeleopConfig) -> TeleopSystem:
         cfg.follower.home if cfg.follower.home is not None else follower_spec.home,
         dtype=np.float64,
     )
+    follower = build_follower_device(cfg.follower, follower_spec)
+    gripper = build_gripper(cfg.follower.gripper, follower, cfg.follower.ip)
     return TeleopSystem(
         leader=build_leader_device(cfg.leader),
-        follower=build_follower_device(cfg.follower, follower_spec),
+        follower=follower,
+        gripper=gripper,
         leader_kin=leader_kin,
         follower_kin=follower_kin,
         retargeter=pipeline.retargeter,

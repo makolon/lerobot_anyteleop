@@ -33,6 +33,7 @@ leader = ["lerobot[feetech]>=0.1"]              # SO-101 leader
 xarm = ["xArm-Python-SDK>=1.13"]                # xArm7 follower
 ur = ["ur_rtde>=1.5"]                           # UR5e/UR10e follower
 franka = ["panda-python>=0.8"]                  # Franka Panda/FR3 follower (needs RT kernel + FCI)
+robotiq = ["pyRobotiqGripper>=3.0"]             # Robotiq 2F-85/2F-140 over USB Modbus
 realsense = ["pyrealsense2>=2.54"]              # Linux x86_64 / Windows
 realsense-macos = ["pyrealsense2-macosx>=2.54"] # Apple Silicon community build
 convert = ["opencv-python>=4.8", "av>=11"]      # HDF5 -> LeRobot mp4 encoding
@@ -102,6 +103,10 @@ platforms = ["linux-64"]
 [tool.pixi.feature.franka.pypi-dependencies]
 panda-python = ">=0.8"
 
+# Robotiq 2F-85/2F-140 (pure-Python Modbus driver) — attachable to any arm.
+[tool.pixi.feature.robotiq.pypi-dependencies]
+pyRobotiqGripper = ">=3.0"
+
 [tool.pixi.feature.convert.pypi-dependencies]
 opencv-python = ">=4.8"
 av = ">=11"
@@ -111,9 +116,9 @@ av = ">=11"
 # `default`: kinematics + viser visualization + tests. No robot SDKs -> solves everywhere.
 default = { features = ["dev"], solve-group = "default" }
 # one environment per follower robot (each adds the SO-101 leader + RealSense):
-xarm = { features = ["hardware", "xarm", "convert", "dev"], solve-group = "xarm" }
-ur = { features = ["hardware", "ur", "convert", "dev"], solve-group = "ur" }
-franka = { features = ["hardware", "franka", "convert", "dev"], solve-group = "franka" }
+xarm = { features = ["hardware", "xarm", "robotiq", "convert", "dev"], solve-group = "xarm" }
+ur = { features = ["hardware", "ur", "robotiq", "convert", "dev"], solve-group = "ur" }
+franka = { features = ["hardware", "franka", "robotiq", "convert", "dev"], solve-group = "franka" }
 # `convert`: HDF5 -> LeRobot dataset conversion only.
 convert = { features = ["convert", "dev"], solve-group = "default" }
 

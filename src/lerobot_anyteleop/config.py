@@ -40,6 +40,17 @@ class LeaderConfig:
 
 
 @dataclass
+class GripperConfig:
+    type: str = "none"            # none | xarm | robotiq | franka
+    options: dict = field(default_factory=dict)  # driver kwargs (com_port, host, speed, ...)
+    deadband: float | None = None  # override the driver's default deadband
+
+    @classmethod
+    def from_dict(cls, d: dict) -> "GripperConfig":
+        return cls(**_filter(cls, d))
+
+
+@dataclass
 class FollowerConfig:
     robot: str = "xarm7"          # xarm7 | panda | ur5e | ...
     backend: str | None = None    # device driver; else robot's default backend
@@ -48,10 +59,15 @@ class FollowerConfig:
     home: list[float] | None = None  # arm-DOF home (rad); else from registry
     ip: str | None = None
     options: dict = field(default_factory=dict)  # extra driver kwargs
+    gripper: GripperConfig = field(default_factory=GripperConfig)
 
     @classmethod
     def from_dict(cls, d: dict) -> "FollowerConfig":
-        return cls(**_filter(cls, d))
+        d = dict(d or {})
+        gripper = GripperConfig.from_dict(d.pop("gripper", {}))
+        obj = cls(**_filter(cls, d))
+        obj.gripper = gripper
+        return obj
 
 
 @dataclass

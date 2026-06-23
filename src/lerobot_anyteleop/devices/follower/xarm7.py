@@ -25,14 +25,10 @@ class XArm7Follower(FollowerInterface):
         ip: str,
         joint_names,
         *,
-        use_gripper: bool = False,
-        gripper_max: float = 850.0,
         home_speed: float = 0.35,  # rad/s for the homing move
     ) -> None:
         self.joint_names = list(joint_names)
         self.ip = ip
-        self.use_gripper = use_gripper
-        self.gripper_max = float(gripper_max)
         self.home_speed = float(home_speed)
         self._arm = None
 
@@ -45,10 +41,11 @@ class XArm7Follower(FollowerInterface):
         self._arm.clean_error()
         self._arm.set_mode(0)
         self._arm.set_state(0)
-        if self.use_gripper:
-            self._arm.set_gripper_enable(True)
-            self._arm.set_gripper_mode(0)
-            self._arm.set_gripper_speed(2000)
+
+    @property
+    def api(self):
+        """The underlying ``XArmAPI`` handle (shared with the xArm native gripper)."""
+        return self._arm
 
     def disconnect(self) -> None:
         if self._arm is not None:
@@ -84,12 +81,6 @@ class XArm7Follower(FollowerInterface):
         q = np.asarray(q, dtype=np.float64)
         code = self._arm.set_servo_angle_j(q.tolist(), is_radian=True)
         self._check(code, "set_servo_angle_j")
-
-    def set_gripper(self, value: float) -> None:
-        if not self.use_gripper:
-            return
-        pos = float(np.clip(value, 0.0, 1.0)) * self.gripper_max
-        self._arm.set_gripper_position(pos, wait=False)
 
     @staticmethod
     def _check(code, what: str) -> None:

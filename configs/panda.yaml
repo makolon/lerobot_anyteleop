@@ -13,6 +13,9 @@ follower:
   ip: 172.16.0.2                    # robot (not Desk) IP
   options:
     home_speed_factor: 0.2
+  gripper:
+    type: franka                    # Franka Hand (ip defaults to follower.ip)
+    options: { speed: 0.1, force: 40.0 }
 
 retarget:
   position_scale: 1.0

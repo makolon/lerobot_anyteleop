@@ -58,6 +58,7 @@ class TeleopController:
         self.sys = system
         self.cfg = config or system.config
         self._last_q_arm: np.ndarray | None = None
+        self._last_grip: float | None = None
         self._t0: float = 0.0
 
     # -- lifecycle ----------------------------------------------------------
@@ -65,6 +66,7 @@ class TeleopController:
         s = self.sys
         s.leader.connect()
         s.follower.connect()
+        s.gripper.connect()  # after the follower (xArm gripper shares its connection)
         s.cameras.start()
 
         s.follower.move_to_joint_positions(s.follower_home, blocking=True)
@@ -79,6 +81,7 @@ class TeleopController:
     def shutdown(self) -> None:
         s = self.sys
         s.cameras.stop()
+        s.gripper.disconnect()
         s.follower.disconnect()
         s.leader.disconnect()
 
@@ -89,7 +92,13 @@ class TeleopController:
         out = s.pipeline.step(state.joint_positions, self._last_q_arm)
 
         s.follower.send_joint_positions(out.follower_q_arm)
-        s.follower.set_gripper(state.gripper)
+
+        # Map the leader gripper (normalized [0,1]) to the attached gripper.
+        # Deadband avoids spamming slow grippers (Franka/Robotiq) at loop rate.
+        g = state.gripper
+        if self._last_grip is None or abs(g - self._last_grip) >= s.gripper.deadband:
+            s.gripper.set_normalized(g)
+            self._last_grip = g
 
         q_meas = s.follower.get_joint_positions()
         self._last_q_arm = q_meas

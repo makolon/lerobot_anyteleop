@@ -69,6 +69,7 @@ src/lerobot_anyteleop/
   devices/
     leader/   {base, so101}                  # SO-101 via lerobot (lazy import)
     follower/ {base, xarm7, ur, franka}      # follower drivers, selected by backend
+    gripper/  {base, none, xarm, robotiq, franka}  # pluggable grippers (normalized [0,1])
     camera/   {base, realsense, manager}     # RealSense D435 (lazy import)
   recording/hdf5_recorder.py # incremental, resizable, compressed HDF5
   config.py / factory.py     # YAML config -> kinematics/devices/system
@@ -113,6 +114,35 @@ pixi run -e xarm anyteleop --config configs/xarm7.yaml --record
    register it in `devices/follower/__init__.py`.
 
 Kinematics, retargeting, recording, and the viser app then work unchanged.
+
+## Grippers (pluggable, independent of the arm)
+
+The SO-101 leader's gripper joint is read as a normalized command in `[0, 1]`
+(1 = open, 0 = closed) and mapped to whatever gripper is attached, configured
+under `follower.gripper`:
+
+| `type` | gripper | how it's driven | needs |
+|---|---|---|---|
+| `xarm` | xArm native gripper | shares the arm's `XArmAPI` (`set_gripper_position`) | `xarm` env |
+| `robotiq` | Robotiq 2F-85 / 2F-140 | UR socket (`backend: ur`) or USB Modbus (`backend: serial`) | `robotiq` (in every hw env) |
+| `franka` | Franka Hand | `panda_py` gripper on a background thread (`move`/`grasp`) | `franka` env |
+| `none` | — | no-op (default) | — |
+
+```yaml
+follower:
+  robot: xarm7
+  ip: 192.168.1.185
+  gripper: { type: xarm, options: { speed: 2000 } }
+  # robotiq on a UR:   gripper: { type: robotiq, options: { backend: ur } }   # host = follower.ip:63352
+  # robotiq via USB:   gripper: { type: robotiq, options: { backend: serial, com_port: /dev/ttyUSB0 } }
+  # franka hand:       gripper: { type: franka,  options: { speed: 0.1, force: 40 } }
+```
+
+Each driver maps `[0,1]` to its hardware units (xArm 0..850, Robotiq 0..255
+inverted, Franka 0..max_width m) and declares a `deadband` so slow grippers
+(Franka/Robotiq) aren't spammed at the control-loop rate. The Robotiq `ur`
+backend needs UR's standalone `robotiq_gripper.py` vendored (it is not a pip
+package); the `serial` backend uses `pyRobotiqGripper`.
 
 ## Recorded HDF5 schema
 
