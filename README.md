@@ -52,6 +52,19 @@ position/orientation-scale sliders and a re-engage (clutch) button. By default
 only the follower is shown (the SO-101 leader is just the input device); add
 `viz-with-leader` / drop `--no-leader` to also render the leader.
 
+The **gripper is rendered and animated** by the gripper slider. Each follower
+gets a sensible default (xArm7 → native xArm gripper, UR5e → mounted Robotiq
+2F-85, Panda → Franka Hand); override with `--gripper-model`:
+
+```bash
+pixi run -- anyteleop-viz --follower ur5e  --gripper-model robotiq_2f85
+pixi run -- anyteleop-viz --follower panda --gripper-model robotiq_2f85   # Panda + Robotiq
+pixi run -- anyteleop-viz --follower xarm7 --gripper-model none
+# any URDF / robot_descriptions name + a flange mount offset (m + rad):
+pixi run -- anyteleop-viz --follower xarm7 --gripper-model /path/to/gripper.urdf \
+    --gripper-mount 0 0 0.01 0 0 0
+```
+
 ![pipeline]: leader sliders → leader FK → retarget → follower IK → render
 
 ## Project layout
@@ -143,6 +156,15 @@ inverted, Franka 0..max_width m) and declares a `deadband` so slow grippers
 (Franka/Robotiq) aren't spammed at the control-loop rate. The Robotiq `ur`
 backend needs UR's standalone `robotiq_gripper.py` vendored (it is not a pip
 package); the `serial` backend uses `pyRobotiqGripper`.
+
+**Visualization** of the gripper (in `anyteleop-viz`) is separate from the
+command driver and selected with `--gripper-model` (see above). The gripper is
+either part of the arm URDF (xArm rendered with its gripper; Franka Hand in
+`panda_description`) or a separate URDF mounted at the flange (Robotiq 2F-85 from
+`robot_descriptions`), and is animated by the gripper slider. To visualize a
+non-default gripper on the Franka arm (e.g. a Robotiq), pass
+`--gripper-model robotiq_2f85` — note the built-in Franka Hand still renders
+unless you also point `follower.urdf` at a hand-less Panda description.
 
 ## Recorded HDF5 schema
 

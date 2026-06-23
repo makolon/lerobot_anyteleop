@@ -16,10 +16,17 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--offset", type=float, default=0.8, help="Follower base x-offset (m).")
     p.add_argument("--no-leader", action="store_true",
                    help="Hide the SO-101 leader robot; show only the follower (centered).")
+    p.add_argument("--gripper-model", default=None,
+                   help="none | xarm | robotiq_2f85 | franka | <urdf path/robot_descriptions name>. "
+                        "Default: per-follower (xarm7->xarm, ur5e->robotiq_2f85, panda->franka).")
+    p.add_argument("--gripper-mount", type=float, nargs=6, default=None,
+                   metavar=("X", "Y", "Z", "R", "P", "Y"),
+                   help="Flange->gripper mount offset (m + rad) for mounted grippers.")
     p.add_argument("--host", default="0.0.0.0")
     p.add_argument("--port", type=int, default=8080)
     args = p.parse_args(argv)
 
+    mount = args.gripper_mount or [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
     run_viser(
         follower_robot=args.follower,
         leader_robot=args.leader,
@@ -27,6 +34,9 @@ def main(argv: list[str] | None = None) -> int:
         orientation_scale=args.orientation_scale,
         follower_offset=args.offset,
         show_leader=not args.no_leader,
+        gripper_model=args.gripper_model,
+        gripper_mount_xyz=tuple(mount[:3]),
+        gripper_mount_rpy=tuple(mount[3:]),
         host=args.host,
         port=args.port,
     )

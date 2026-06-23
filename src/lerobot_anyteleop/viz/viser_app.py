@@ -24,7 +24,7 @@ from ..config import FollowerConfig, LeaderConfig, RetargetConfig
 from ..factory import build_pipeline
 from ..joint_utils import reorder
 from ..kinematics.urdf import load_urdf
-from ..robots import get_robot_spec
+from .gripper_visual import finger_targets, resolve_follower_visual
 
 
 def _slider_limits(kin, name: str) -> tuple[float, float]:
@@ -45,6 +45,9 @@ def run_viser(
     orientation_scale: float = 1.0,
     follower_offset: float = 0.8,
     show_leader: bool = True,
+    gripper_model: str | None = None,           # None -> default per follower
+    gripper_mount_xyz=(0.0, 0.0, 0.0),
+    gripper_mount_rpy=(0.0, 0.0, 0.0),
     host: str = "0.0.0.0",
     port: int = 8080,
     rate_hz: float = 30.0,
@@ -76,10 +79,36 @@ def run_viser(
     server.scene.add_frame(
         "/follower_base", position=follower_pos, wxyz=(1.0, 0.0, 0.0, 0.0), show_axes=False
     )
-    follower_vis = ViserUrdf(
-        server, load_urdf(follower_spec.urdf, load_meshes=True), root_node_name="/follower_base"
+    # Follower visual: arm [+ gripper]. The gripper may be part of the arm URDF
+    # (xArm native / Franka Hand) or a separately mounted URDF (Robotiq).
+    fvis = resolve_follower_visual(
+        follower_spec, gripper_model, mount_xyz=gripper_mount_xyz, mount_rpy=gripper_mount_rpy
     )
+    follower_vis = ViserUrdf(server, fvis.arm_urdf, root_node_name="/follower_base")
     follower_vis_names = list(follower_vis.get_actuated_joint_names())
+
+    gripper_vis = None
+    gripper_vis_names: list[str] = []
+    mount_frame = None
+    if fvis.gripper_urdf is not None:
+        mount_frame = server.scene.add_frame("/follower_base/gripper_mount", show_axes=False)
+        gripper_vis = ViserUrdf(
+            server, fvis.gripper_urdf, root_node_name="/follower_base/gripper_mount"
+        )
+        gripper_vis_names = list(gripper_vis.get_actuated_joint_names())
+
+    def update_follower(q_full, gripper_value) -> None:
+        d = pipeline.jmap.full_dict(q_full)
+        if fvis.combined:
+            d.update(finger_targets(fvis.finger_joints, gripper_value))
+        follower_vis.update_cfg(reorder(d, follower_vis_names))
+        if gripper_vis is not None:
+            ee = follower_kin.fk(q_full).multiply(fvis.mount_offset)
+            mount_frame.position = tuple(ee.position)
+            mount_frame.wxyz = tuple(ee.wxyz)
+            gripper_vis.update_cfg(
+                reorder(finger_targets(fvis.finger_joints, gripper_value), gripper_vis_names)
+            )
 
     leader_vis = None
     leader_vis_names: list[str] = []
@@ -117,9 +146,8 @@ def run_viser(
 
     if leader_vis is not None:
         leader_vis.update_cfg(reorder(leader_joint_dict(), leader_vis_names))
-    follower_vis.update_cfg(
-        reorder(pipeline.jmap.full_dict(pipeline.jmap.to_full(follower_home, follower_kin.rest_pose())),
-                follower_vis_names)
+    update_follower(
+        pipeline.jmap.to_full(follower_home, follower_kin.rest_pose()), gripper_slider.value
     )
     target_frame = server.scene.add_frame("/follower_base/ee_target", axes_length=0.1, axes_radius=0.004)
 
@@ -141,9 +169,7 @@ def run_viser(
         # update robots
         if leader_vis is not None:
             leader_vis.update_cfg(reorder(ljd, leader_vis_names))
-        follower_vis.update_cfg(
-            reorder(pipeline.jmap.full_dict(out.follower_q_full), follower_vis_names)
-        )
+        update_follower(out.follower_q_full, gripper_slider.value)
         # update target frame (expressed in follower base frame)
         tp = out.follower_target_pose
         target_frame.position = tuple(tp.position)
