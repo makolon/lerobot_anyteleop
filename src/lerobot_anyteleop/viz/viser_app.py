@@ -44,6 +44,7 @@ def run_viser(
     position_scale: float = 1.5,
     orientation_scale: float = 1.0,
     follower_offset: float = 0.8,
+    show_leader: bool = True,
     host: str = "0.0.0.0",
     port: int = 8080,
     rate_hz: float = 30.0,
@@ -59,11 +60,10 @@ def run_viser(
     )
     follower_home = np.asarray(follower_spec.home, dtype=np.float64)
 
-    # Follower URDFs (xArm7 / Panda / UR5e) are fetched + cached automatically by
-    # robot_descriptions on first use. Only the SO-101 leader meshes are vendored.
-    leader_urdf_path = leader_spec.urdf
-    if leader_urdf_path.endswith(".urdf"):
-        mesh_dir = os.path.join(os.path.dirname(leader_urdf_path), "assets")
+    # The SO-101 leader is only an *input device*: rendering it is optional (it just
+    # shows the source pose being retargeted). The follower is what we care about.
+    if show_leader and leader_spec.urdf.endswith(".urdf"):
+        mesh_dir = os.path.join(os.path.dirname(leader_spec.urdf), "assets")
         if not os.path.isdir(mesh_dir):
             print(f"[viz] note: SO-101 meshes not found at {mesh_dir} — the leader will "
                   f"render without geometry. Run `anyteleop-fetch-urdf` to fetch them.")
@@ -71,20 +71,24 @@ def run_viser(
     server = viser.ViserServer(host=host, port=port)
     server.scene.add_grid("/grid", width=2.0, height=2.0)
 
-    # Leader at origin, follower offset along +x so they don't overlap.
-    server.scene.add_frame("/leader_base", show_axes=False)
+    # Follower at origin when the leader is hidden, else offset along +x to separate them.
+    follower_pos = (0.0, 0.0, 0.0) if not show_leader else (follower_offset, 0.0, 0.0)
     server.scene.add_frame(
-        "/follower_base", position=(follower_offset, 0.0, 0.0), wxyz=(1.0, 0.0, 0.0, 0.0),
-        show_axes=False,
-    )
-    leader_vis = ViserUrdf(
-        server, load_urdf(leader_spec.urdf, load_meshes=True), root_node_name="/leader_base"
+        "/follower_base", position=follower_pos, wxyz=(1.0, 0.0, 0.0, 0.0), show_axes=False
     )
     follower_vis = ViserUrdf(
         server, load_urdf(follower_spec.urdf, load_meshes=True), root_node_name="/follower_base"
     )
-    leader_vis_names = list(leader_vis.get_actuated_joint_names())
     follower_vis_names = list(follower_vis.get_actuated_joint_names())
+
+    leader_vis = None
+    leader_vis_names: list[str] = []
+    if show_leader:
+        server.scene.add_frame("/leader_base", show_axes=False)
+        leader_vis = ViserUrdf(
+            server, load_urdf(leader_spec.urdf, load_meshes=True), root_node_name="/leader_base"
+        )
+        leader_vis_names = list(leader_vis.get_actuated_joint_names())
 
     # --- GUI ---------------------------------------------------------------
     server.gui.add_markdown(f"### Leader **{leader_robot}** -> Follower **{follower_robot}**")
@@ -111,7 +115,8 @@ def run_viser(
     def _(_) -> None:
         state["reengage"] = True
 
-    leader_vis.update_cfg(reorder(leader_joint_dict(), leader_vis_names))
+    if leader_vis is not None:
+        leader_vis.update_cfg(reorder(leader_joint_dict(), leader_vis_names))
     follower_vis.update_cfg(
         reorder(pipeline.jmap.full_dict(pipeline.jmap.to_full(follower_home, follower_kin.rest_pose())),
                 follower_vis_names)
@@ -134,7 +139,8 @@ def run_viser(
         state["q_arm"] = out.follower_q_arm  # perfect (kinematic) tracking
 
         # update robots
-        leader_vis.update_cfg(reorder(ljd, leader_vis_names))
+        if leader_vis is not None:
+            leader_vis.update_cfg(reorder(ljd, leader_vis_names))
         follower_vis.update_cfg(
             reorder(pipeline.jmap.full_dict(out.follower_q_full), follower_vis_names)
         )

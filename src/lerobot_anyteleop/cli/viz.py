@@ -14,6 +14,8 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--position-scale", type=float, default=1.5)
     p.add_argument("--orientation-scale", type=float, default=1.0)
     p.add_argument("--offset", type=float, default=0.8, help="Follower base x-offset (m).")
+    p.add_argument("--no-leader", action="store_true",
+                   help="Hide the SO-101 leader robot; show only the follower (centered).")
     p.add_argument("--host", default="0.0.0.0")
     p.add_argument("--port", type=int, default=8080)
     args = p.parse_args(argv)
@@ -24,6 +26,7 @@ def main(argv: list[str] | None = None) -> int:
         position_scale=args.position_scale,
         orientation_scale=args.orientation_scale,
         follower_offset=args.offset,
+        show_leader=not args.no_leader,
         host=args.host,
         port=args.port,
     )
