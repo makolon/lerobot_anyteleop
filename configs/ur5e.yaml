@@ -1,0 +1,33 @@
+# SO-101 leader -> UR5e follower (ur_rtde).
+# Run: pixi run -e ur anyteleop --config configs/ur5e.yaml --record
+task: pick_and_place
+
+leader:
+  robot: so101
+  backend: so101
+  port: /dev/ttyACM0
+  arm_id: so101_leader
+
+follower:
+  robot: ur5e
+  ip: 192.168.1.10
+  options:
+    servo_dt: 0.008                  # match the loop period (1/rate_hz)
+    lookahead_time: 0.1
+    gain: 300.0
+
+retarget:
+  position_scale: 1.0
+  orientation_scale: 1.0
+  align_rpy: [0.0, 0.0, 0.0]
+
+cameras:
+  - { name: top, serial: "REPLACE_TOP_SERIAL", width: 640, height: 480, fps: 30 }
+
+record:
+  output_dir: data/recordings
+  fps: 30
+
+loop:
+  rate_hz: 125                       # UR e-series servo rate
+  max_steps: null

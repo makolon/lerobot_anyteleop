@@ -1,0 +1,34 @@
+"""``anyteleop-viz`` — interactive viser visualization of the retargeting."""
+
+from __future__ import annotations
+
+import argparse
+
+from ..viz import run_viser
+
+
+def main(argv: list[str] | None = None) -> int:
+    p = argparse.ArgumentParser(description=__doc__)
+    p.add_argument("--follower", default="xarm7", help="xarm7 | panda | ur5e")
+    p.add_argument("--leader", default="so101")
+    p.add_argument("--position-scale", type=float, default=1.5)
+    p.add_argument("--orientation-scale", type=float, default=1.0)
+    p.add_argument("--offset", type=float, default=0.8, help="Follower base x-offset (m).")
+    p.add_argument("--host", default="0.0.0.0")
+    p.add_argument("--port", type=int, default=8080)
+    args = p.parse_args(argv)
+
+    run_viser(
+        follower_robot=args.follower,
+        leader_robot=args.leader,
+        position_scale=args.position_scale,
+        orientation_scale=args.orientation_scale,
+        follower_offset=args.offset,
+        host=args.host,
+        port=args.port,
+    )
+    return 0
+
+
+if __name__ == "__main__":  # pragma: no cover
+    raise SystemExit(main())

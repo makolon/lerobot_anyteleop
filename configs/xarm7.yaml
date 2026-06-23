@@ -1,0 +1,38 @@
+# SO-101 leader -> xArm7 follower + RealSense D435.
+# Robot names resolve URDF / EE link / joints / home from the registry.
+# Run with: pixi run -e xarm anyteleop --config configs/xarm7.yaml --record
+task: pick_and_place
+
+leader:
+  robot: so101
+  backend: so101
+  port: /dev/tty.usbmodemXXXXXXXX   # `ls /dev/tty.usb*` (macOS) or /dev/ttyACM* (Linux)
+  arm_id: so101_leader
+  calibrate: false                  # true once to (re)calibrate the leader
+  # joint_sign:   { shoulder_pan: 1.0 }   # if leader calib zero != URDF zero
+  # joint_offset: { shoulder_pan: 0.0 }
+
+follower:
+  robot: xarm7
+  ip: 192.168.1.185
+  options:
+    use_gripper: true
+  # home: [0.0, -0.35, 0.0, 0.6, 0.0, 0.95, 0.0]   # override registry home
+
+retarget:
+  position_scale: 1.0
+  orientation_scale: 1.0
+  align_rpy: [0.0, 0.0, 0.0]        # leader_base -> follower_base (rad)
+
+cameras:
+  - { name: top,   serial: "REPLACE_TOP_SERIAL",   width: 640, height: 480, fps: 30, enable_depth: true }
+  - { name: wrist, serial: "REPLACE_WRIST_SERIAL", width: 640, height: 480, fps: 30 }
+
+record:
+  output_dir: data/recordings
+  fps: 30
+  record_depth: true
+
+loop:
+  rate_hz: 30
+  max_steps: null

@@ -1,0 +1,121 @@
+[project]
+name = "lerobot-anyteleop"
+version = "0.1.0"
+description = "Kinematics-based teleoperation: LeRobot SO-101 leader -> xArm7 follower, with multi-camera HDF5 recording."
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "Apache-2.0" }
+authors = [{ name = "makolon" }]
+
+# Core dependencies. This set is enough to run the *mock/sim* pipeline end-to-end
+# (no robot/camera hardware required). Hardware drivers live in optional extras.
+dependencies = [
+    "numpy>=1.24",
+    "h5py>=3.8",
+    "pyyaml>=6.0",
+    "tyro>=0.8",
+    # Kinematics stack (pyroki = JAX-based FK/IK toolkit).
+    "jax>=0.4.30",
+    "jaxlie>=1.4.0",
+    "jax-dataclasses>=1.6.0",
+    "jaxtyping>=0.2",
+    "yourdfpy>=0.0.56",
+    "robot_descriptions>=1.12",
+    "xacrodoc>=2.0",                # render xacro robots (xarm7 / ur5e / panda)
+    "viser>=1.0",                   # 3D visualization of the retargeting
+    "jaxls @ git+https://github.com/brentyi/jaxls.git",
+    "pyroki @ git+https://github.com/chungmin99/pyroki.git",
+]
+
+[project.optional-dependencies]
+# Real robot/sensor drivers. Imported lazily, only when a "real" backend is selected.
+leader = ["lerobot[feetech]>=0.1"]              # SO-101 leader
+xarm = ["xArm-Python-SDK>=1.13"]                # xArm7 follower
+ur = ["ur_rtde>=1.5"]                           # UR5e/UR10e follower
+franka = ["panda-python>=0.8"]                  # Franka Panda/FR3 follower (needs RT kernel + FCI)
+realsense = ["pyrealsense2>=2.54"]              # Linux x86_64 / Windows
+realsense-macos = ["pyrealsense2-macosx>=2.54"] # Apple Silicon community build
+convert = ["opencv-python>=4.8", "av>=11"]      # HDF5 -> LeRobot mp4 encoding
+dev = ["pytest>=7.4", "pytest-cov>=4.1"]
+
+[project.scripts]
+anyteleop = "lerobot_anyteleop.cli.teleop:main"
+anyteleop-viz = "lerobot_anyteleop.cli.viz:main"
+anyteleop-list-cameras = "lerobot_anyteleop.cli.list_cameras:main"
+anyteleop-fetch-urdf = "lerobot_anyteleop.cli.fetch_urdf:main"
+anyteleop-inspect = "lerobot_anyteleop.cli.inspect_hdf5:main"
+anyteleop-convert = "lerobot_anyteleop.cli.convert_to_lerobot:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/lerobot_anyteleop"]
+
+[tool.hatch.metadata]
+allow-direct-references = true  # required for git+https dependencies
+
+# ---------------------------------------------------------------------------
+# pixi configuration
+# ---------------------------------------------------------------------------
+[tool.pixi.workspace]
+channels = ["conda-forge"]
+platforms = ["linux-64", "osx-arm64"]
+
+# Conda-provided binaries (interpreter only; everything else via PyPI/uv).
+[tool.pixi.dependencies]
+python = "3.12.*"
+
+# Install this project (editable) plus its core dependency tree into every env.
+[tool.pixi.pypi-dependencies]
+lerobot-anyteleop = { path = ".", editable = true }
+
+# ---- features -------------------------------------------------------------
+[tool.pixi.feature.dev.pypi-dependencies]
+pytest = "*"
+pytest-cov = "*"
+
+# `hardware`: leader (lerobot) + RealSense, shared by every real follower env.
+[tool.pixi.feature.hardware.pypi-dependencies]
+lerobot = { version = ">=0.1", extras = ["feetech"] }
+[tool.pixi.feature.hardware.target.linux-64.pypi-dependencies]
+pyrealsense2 = ">=2.54"
+[tool.pixi.feature.hardware.target.osx-arm64.pypi-dependencies]
+pyrealsense2-macosx = ">=2.54"
+
+# per-follower driver features
+[tool.pixi.feature.xarm.pypi-dependencies]
+"xArm-Python-SDK" = ">=1.13"
+[tool.pixi.feature.ur.pypi-dependencies]
+ur_rtde = ">=1.5"
+[tool.pixi.feature.franka.pypi-dependencies]
+panda-python = ">=0.8"
+
+[tool.pixi.feature.convert.pypi-dependencies]
+opencv-python = ">=4.8"
+av = ">=11"
+
+# ---- environments ---------------------------------------------------------
+[tool.pixi.environments]
+# `default`: kinematics + viser visualization + tests. No robot SDKs -> solves everywhere.
+default = { features = ["dev"], solve-group = "default" }
+# one environment per follower robot (each adds the SO-101 leader + RealSense):
+xarm = { features = ["hardware", "xarm", "convert", "dev"], solve-group = "xarm" }
+ur = { features = ["hardware", "ur", "convert", "dev"], solve-group = "ur" }
+franka = { features = ["hardware", "franka", "convert", "dev"], solve-group = "franka" }
+# `convert`: HDF5 -> LeRobot dataset conversion only.
+convert = { features = ["convert", "dev"], solve-group = "default" }
+
+# ---- tasks ----------------------------------------------------------------
+[tool.pixi.tasks]
+test = "pytest -q"
+viz = "anyteleop-viz --follower xarm7"
+fetch-urdf = "anyteleop-fetch-urdf"
+
+[tool.pixi.feature.hardware.tasks]
+list-cameras = "anyteleop-list-cameras"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"

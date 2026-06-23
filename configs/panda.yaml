@@ -1,0 +1,31 @@
+# SO-101 leader -> Franka Panda / FR3 follower.
+# Requires a PREEMPT_RT kernel + FCI enabled. Run: pixi run -e franka anyteleop --config configs/panda.yaml --record
+task: pick_and_place
+
+leader:
+  robot: so101
+  backend: so101
+  port: /dev/ttyACM0
+  arm_id: so101_leader
+
+follower:
+  robot: panda
+  ip: 172.16.0.2                    # robot (not Desk) IP
+  options:
+    home_speed_factor: 0.2
+
+retarget:
+  position_scale: 1.0
+  orientation_scale: 1.0
+  align_rpy: [0.0, 0.0, 0.0]
+
+cameras:
+  - { name: top, serial: "REPLACE_TOP_SERIAL", width: 640, height: 480, fps: 30 }
+
+record:
+  output_dir: data/recordings
+  fps: 30
+
+loop:
+  rate_hz: 100                       # Panda servo loop likes a high rate
+  max_steps: null
