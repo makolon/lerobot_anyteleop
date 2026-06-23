@@ -15,6 +15,7 @@ Run::
 
 from __future__ import annotations
 
+import os
 import time
 
 import numpy as np
@@ -57,6 +58,15 @@ def run_viser(
         leader_cfg, follower_cfg, retarget
     )
     follower_home = np.asarray(follower_spec.home, dtype=np.float64)
+
+    # Follower URDFs (xArm7 / Panda / UR5e) are fetched + cached automatically by
+    # robot_descriptions on first use. Only the SO-101 leader meshes are vendored.
+    leader_urdf_path = leader_spec.urdf
+    if leader_urdf_path.endswith(".urdf"):
+        mesh_dir = os.path.join(os.path.dirname(leader_urdf_path), "assets")
+        if not os.path.isdir(mesh_dir):
+            print(f"[viz] note: SO-101 meshes not found at {mesh_dir} — the leader will "
+                  f"render without geometry. Run `anyteleop-fetch-urdf` to fetch them.")
 
     server = viser.ViserServer(host=host, port=port)
     server.scene.add_grid("/grid", width=2.0, height=2.0)

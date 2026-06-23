@@ -221,7 +221,7 @@ __marimo__/
 data/
 *.hdf5
 .pixi/
-pixi.lock
+# pixi.lock is committed for reproducible installs
 
 # Vendored SO-101 meshes (fetch with anyteleop-fetch-urdf)
 assets/urdf/so101/assets/

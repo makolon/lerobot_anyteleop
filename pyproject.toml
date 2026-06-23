@@ -84,11 +84,21 @@ pyrealsense2 = ">=2.54"
 [tool.pixi.feature.hardware.target.osx-arm64.pypi-dependencies]
 pyrealsense2-macosx = ">=2.54"
 
-# per-follower driver features
+# per-follower driver features.
+# xArm-Python-SDK is pure Python (cross-platform). ur_rtde and panda-python only
+# ship Linux x86_64 wheels, so the `ur` / `franka` features (and any environment
+# using them) are restricted to linux-64 — the robot host. The `default` env still
+# solves on osx-arm64 for local dev / visualization.
 [tool.pixi.feature.xarm.pypi-dependencies]
 "xArm-Python-SDK" = ">=1.13"
+
+[tool.pixi.feature.ur]
+platforms = ["linux-64"]
 [tool.pixi.feature.ur.pypi-dependencies]
 ur_rtde = ">=1.5"
+
+[tool.pixi.feature.franka]
+platforms = ["linux-64"]
 [tool.pixi.feature.franka.pypi-dependencies]
 panda-python = ">=0.8"
 
