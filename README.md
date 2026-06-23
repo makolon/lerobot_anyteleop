@@ -41,13 +41,16 @@ The hardware-free path is an interactive 3D visualization that runs the **exact
 same retargeting pipeline** as the real controller:
 
 ```bash
-pixi run viz                                  # SO-101 -> xArm7
-pixi run -- anyteleop-viz --follower panda    # or panda / ur5e
+pixi run viz                                            # follower-only (xArm7)
+pixi run -- anyteleop-viz --follower panda --no-leader  # or panda / ur5e
+pixi run viz-with-leader                                # also render the SO-101 leader
 # open the printed http://localhost:8080
 ```
 
-Drag the leader joint sliders; the follower solves IK and both arms move in 3D,
-with live position/orientation-scale sliders and a re-engage (clutch) button.
+Drag the leader joint sliders; the follower solves IK and moves in 3D, with live
+position/orientation-scale sliders and a re-engage (clutch) button. By default
+only the follower is shown (the SO-101 leader is just the input device); add
+`viz-with-leader` / drop `--no-leader` to also render the leader.
 
 ![pipeline]: leader sliders → leader FK → retarget → follower IK → render
 

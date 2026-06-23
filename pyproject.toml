@@ -120,7 +120,8 @@ convert = { features = ["convert", "dev"], solve-group = "default" }
 # ---- tasks ----------------------------------------------------------------
 [tool.pixi.tasks]
 test = "pytest -q"
-viz = "anyteleop-viz --follower xarm7"
+viz = "anyteleop-viz --follower xarm7 --no-leader"           # follower-only (default)
+viz-with-leader = "anyteleop-viz --follower xarm7"           # also render the SO-101 leader
 fetch-urdf = "anyteleop-fetch-urdf"
 
 [tool.pixi.feature.hardware.tasks]
