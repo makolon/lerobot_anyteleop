@@ -115,7 +115,7 @@ def _system(tmp_path) -> tuple[TeleopSystem, TeleopConfig]:
 def test_controller_runs_and_records(tmp_path):
     sys, cfg = _system(tmp_path)
     controller = TeleopController(sys, cfg)
-    n = controller.run(record=True)
+    n = controller.run(record=True, instruction="pick up the red cube")
     assert n == 6
 
     path = sys.recorder.path
@@ -126,8 +126,32 @@ def test_controller_runs_and_records(tmp_path):
         assert f["observation/leader_qpos"].shape == (6, 6)  # 5 arm + gripper
         assert f["observation/follower_ee_pose"].shape == (6, 7)
         assert f.attrs["num_steps"] == 6
+        # language instruction stored for LeRobot conversion
+        assert f.attrs["task"] == "pick up the red cube"
+        assert f.attrs["instruction"] == "pick up the red cube"
         # follower moved in response to leader motion
         assert np.std(f["action/follower_qpos"][:]) > 1e-4
 
     # leader gripper (0.5) was forwarded to the gripper device
     assert sys.gripper.commands and sys.gripper.commands[0] == 0.5
+
+
+def test_multi_episode_per_instruction(tmp_path):
+    sys, cfg = _system(tmp_path)
+    controller = TeleopController(sys, cfg)
+    controller.setup()
+    instructions = ["pick up the cube", "place it in the bin"]
+    paths = []
+    try:
+        for instr in instructions:
+            controller.record_episode(instr, max_steps=4)
+            paths.append(sys.recorder.path)
+    finally:
+        controller.shutdown()
+
+    assert paths[0].name == "episode_000000.hdf5"
+    assert paths[1].name == "episode_000001.hdf5"
+    for path, instr in zip(paths, instructions):
+        with h5py.File(path, "r") as f:
+            assert f.attrs["task"] == instr
+            assert f["observation/follower_qpos"].shape == (4, 7)

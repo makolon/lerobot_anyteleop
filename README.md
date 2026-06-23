@@ -108,8 +108,15 @@ pixi install -e franka       #  Panda  (panda-python; needs RT kernel + FCI)
 
 pixi run -e xarm anyteleop-list-cameras               # discover RealSense serials
 # edit configs/xarm7.yaml (leader port, robot ip, serials), then:
-pixi run -e xarm anyteleop --config configs/xarm7.yaml --record
+pixi run -e xarm anyteleop --config configs/xarm7.yaml --record --task "pick up the red cube"
+# collect several episodes, prompting for a language instruction before each:
+pixi run -e xarm anyteleop --config configs/xarm7.yaml --record --episodes 20
 ```
+
+Each recorded episode carries a **language instruction** (LeRobot's per-episode
+`task`). Provide it with `--task` (reused for every episode), or omit it and the
+tool prompts before each episode; `--episodes N` records N episodes in one
+session (re-homing between). Ctrl-C ends the current episode.
 
 > The `default` environment has the full **kinematics stack** (jax + pyroki +
 > viser) so visualization and the whole retarget→IK pipeline are testable with no
@@ -183,8 +190,8 @@ One `episode_XXXXXX.hdf5` per episode (datasets grow per step):
 | `/action/gripper` | `(T,1)` | f32 | normalized gripper |
 | `/timestamp` | `(T,)` | f64 | seconds since episode start |
 
-`N` = follower arm DOF (7 xArm7/Panda, 6 UR5e). Attributes store `fps`, `task`,
-joint/camera names, `num_steps`.
+`N` = follower arm DOF (7 xArm7/Panda, 6 UR5e). Attributes store `fps`, `task`
+(the language instruction), `instruction`, joint/camera names, `num_steps`.
 
 ```bash
 anyteleop-inspect data/recordings/episode_000000.hdf5
@@ -198,7 +205,8 @@ pixi run -e xarm anyteleop-convert --input-dir data/recordings --repo-id local/a
 ```
 
 Mapping: `observation.state ← follower_qpos`, `action ← action/follower_qpos`,
-`observation.images.<cam> ← images/<cam>`. The LeRobot dataset API changed across
+`observation.images.<cam> ← images/<cam>`, and the per-episode `task` attribute
+becomes each frame's language instruction. The LeRobot dataset API changed across
 v2.x/v3.0, so the write path is a version-flagged best-effort scaffold; the
 `--dry-run` mapping is stable. See `cli/convert_to_lerobot.py`.
 

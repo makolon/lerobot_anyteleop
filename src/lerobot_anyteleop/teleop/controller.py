@@ -63,18 +63,21 @@ class TeleopController:
 
     # -- lifecycle ----------------------------------------------------------
     def setup(self) -> None:
+        """Connect devices (once per session)."""
         s = self.sys
         s.leader.connect()
         s.follower.connect()
         s.gripper.connect()  # after the follower (xArm gripper shares its connection)
         s.cameras.start()
 
+    def prepare_episode(self) -> None:
+        """Home the follower and re-anchor the retargeter (run before each episode)."""
+        s = self.sys
         s.follower.move_to_joint_positions(s.follower_home, blocking=True)
         self._last_q_arm = s.follower.get_joint_positions()
-
+        self._last_grip = None
         state = s.leader.get_state()
         s.pipeline.engage(state.joint_positions, self._last_q_arm)
-
         s.follower.enter_servo_mode()
         self._t0 = time.perf_counter()
 
@@ -138,34 +141,57 @@ class TeleopController:
                 data[f"observation/depth/{name}"] = frame.depth
         s.recorder.add_step(data)
 
-    # -- run ----------------------------------------------------------------
-    def run(self, record: bool = False) -> int:
-        """Run the loop until ``loop.max_steps`` (or Ctrl-C). Returns step count."""
-        self.setup()
+    def _episode_metadata(self, instruction: str) -> dict:
         s = self.sys
-        if record:
-            meta = {
-                "task": self.cfg.task,
-                "leader": self.cfg.leader.robot,
-                "follower": self.cfg.follower.robot,
-                "camera_names": s.cameras.names,
-                "follower_joint_names": list(s.follower.joint_names),
-                "leader_joint_names": list(s.leader.joint_names),
-            }
-            s.recorder.start_episode(metadata=meta)
+        return {
+            "task": instruction,          # LeRobot uses "task" for the language instruction
+            "instruction": instruction,
+            "leader": self.cfg.leader.robot,
+            "follower": self.cfg.follower.robot,
+            "camera_names": s.cameras.names,
+            "follower_joint_names": list(s.follower.joint_names),
+            "leader_joint_names": list(s.leader.joint_names),
+        }
 
+    def _loop(self, record: bool, max_steps: int | None) -> int:
         rate = Rate(self.cfg.loop.rate_hz)
         rate.reset()
         n = 0
         try:
-            while self.cfg.loop.max_steps is None or n < self.cfg.loop.max_steps:
+            while max_steps is None or n < max_steps:
                 self.step(record=record)
                 n += 1
                 rate.sleep()
         except KeyboardInterrupt:
             pass
-        finally:
-            if record and s.recorder.is_recording:
-                s.recorder.end_episode()
-            self.shutdown()
         return n
+
+    # -- recording ----------------------------------------------------------
+    def record_episode(self, instruction: str, max_steps: int | None = None) -> int:
+        """Home, then record one episode tagged with ``instruction``. Returns step count.
+
+        ``instruction`` is the language task stored in the HDF5 metadata (``task``),
+        which the LeRobot converter maps to the per-frame task.
+        """
+        s = self.sys
+        self.prepare_episode()
+        s.recorder.start_episode(metadata=self._episode_metadata(instruction))
+        max_steps = self.cfg.loop.max_steps if max_steps is None else max_steps
+        try:
+            n = self._loop(record=True, max_steps=max_steps)
+        finally:
+            if s.recorder.is_recording:
+                s.recorder.end_episode()
+        return n
+
+    # -- run (single episode / plain teleop) --------------------------------
+    def run(self, record: bool = False, instruction: str | None = None) -> int:
+        """Run one session: plain teleop, or record a single episode if ``record``."""
+        self.setup()
+        try:
+            if record:
+                return self.record_episode(instruction or self.cfg.task, self.cfg.loop.max_steps)
+            self.prepare_episode()
+            return self._loop(record=False, max_steps=self.cfg.loop.max_steps)
+        finally:
+            self.shutdown()
