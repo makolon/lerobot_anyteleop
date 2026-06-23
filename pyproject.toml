@@ -107,6 +107,11 @@ panda-python = ">=0.8"
 [tool.pixi.feature.robotiq.pypi-dependencies]
 pyRobotiqGripper = ">=3.0"
 
+# `leader`: just the SO-101 leader driver (lerobot), for live viser preview with
+# no follower hardware.
+[tool.pixi.feature.leader.pypi-dependencies]
+lerobot = { version = ">=0.1", extras = ["feetech"] }
+
 [tool.pixi.feature.convert.pypi-dependencies]
 opencv-python = ">=4.8"
 av = ">=11"
@@ -119,6 +124,9 @@ default = { features = ["dev"], solve-group = "default" }
 xarm = { features = ["hardware", "xarm", "robotiq", "convert", "dev"], solve-group = "xarm" }
 ur = { features = ["hardware", "ur", "robotiq", "convert", "dev"], solve-group = "ur" }
 franka = { features = ["hardware", "franka", "robotiq", "convert", "dev"], solve-group = "franka" }
+# `viz-live`: drive the viser visualization from the REAL SO-101 leader (no
+# follower hardware) — kinematics + viser + the SO-101 driver.
+viz-live = { features = ["leader", "dev"], solve-group = "live" }
 # `convert`: HDF5 -> LeRobot dataset conversion only.
 convert = { features = ["convert", "dev"], solve-group = "default" }
 

@@ -52,9 +52,25 @@ position/orientation-scale sliders and a re-engage (clutch) button. By default
 only the follower is shown (the SO-101 leader is just the input device); add
 `viz-with-leader` / drop `--no-leader` to also render the leader.
 
-The **gripper is rendered and animated** by the gripper slider. Each follower
-gets a sensible default (xArm7 → native xArm gripper, UR5e → mounted Robotiq
-2F-85, Panda → Franka Hand); override with `--gripper-model`:
+### Live preview from the real SO-101 (no follower hardware)
+
+Drive the viser preview from the **physical SO-101 leader** to see how the chosen
+follower *would* move — without connecting any follower robot:
+
+```bash
+pixi install -e viz-live      # kinematics + viser + SO-101 driver (lerobot), no follower SDK
+pixi run -e viz-live anyteleop-viz --follower xarm7 --leader-port /dev/ttyACM0
+#   --leader-id <calib id>   --calibrate (first time)   --follower panda|ur5e
+```
+
+Move the leader and the follower tracks it in 3D. Use the **re-engage (clutch)**
+button to re-anchor (the physical leader can't be reset like a slider). With
+`--leader-port` omitted, the leader is driven by GUI sliders instead.
+
+The **gripper is rendered and animated** by the gripper slider (or the leader's
+gripper, in live mode). Each follower gets a sensible default (xArm7 → native xArm
+gripper, UR5e → mounted Robotiq 2F-85, Panda → Franka Hand); override with
+`--gripper-model`:
 
 ```bash
 pixi run -- anyteleop-viz --follower ur5e  --gripper-model robotiq_2f85

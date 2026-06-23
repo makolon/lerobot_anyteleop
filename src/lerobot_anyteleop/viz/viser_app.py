@@ -48,6 +48,9 @@ def run_viser(
     gripper_model: str | None = None,           # None -> default per follower
     gripper_mount_xyz=None,                      # None -> per-arm default (GRIPPER_MOUNTS)
     gripper_mount_rpy=None,
+    leader_port: str | None = None,             # set -> drive from the REAL SO-101
+    leader_id: str = "so101_leader",
+    leader_calibrate: bool = False,
     host: str = "0.0.0.0",
     port: int = 8080,
     rate_hz: float = 30.0,
@@ -119,23 +122,41 @@ def run_viser(
         )
         leader_vis_names = list(leader_vis.get_actuated_joint_names())
 
+    # --- leader source: real SO-101 device, or GUI sliders -----------------
+    leader_dev = None
+    if leader_port is not None:
+        from ..devices.leader.so101 import SO101Leader
+
+        leader_dev = SO101Leader(port=leader_port, arm_id=leader_id, calibrate=leader_calibrate)
+        leader_dev.connect()
+        print(f"[viz] connected real SO-101 leader on {leader_port}")
+
     # --- GUI ---------------------------------------------------------------
-    server.gui.add_markdown(f"### Leader **{leader_robot}** -> Follower **{follower_robot}**")
-    joint_sliders = {}
-    for name in leader_spec.arm_joint_names:
-        lo, hi = _slider_limits(leader_kin, name)
-        joint_sliders[name] = server.gui.add_slider(
-            name, min=lo, max=hi, step=1e-3, initial_value=0.0
-        )
-    gripper_slider = server.gui.add_slider("gripper", min=0.0, max=1.0, step=1e-2, initial_value=0.5)
+    src = "real SO-101" if leader_dev is not None else "sliders"
+    server.gui.add_markdown(
+        f"### Leader **{leader_robot}** ({src}) -> Follower **{follower_robot}**"
+    )
+    joint_sliders: dict = {}
+    gripper_slider = None
+    if leader_dev is None:
+        for name in leader_spec.arm_joint_names:
+            lo, hi = _slider_limits(leader_kin, name)
+            joint_sliders[name] = server.gui.add_slider(
+                name, min=lo, max=hi, step=1e-3, initial_value=0.0
+            )
+        gripper_slider = server.gui.add_slider("gripper", 0.0, 1.0, 1e-2, 0.5)
 
     pos_scale_gui = server.gui.add_slider("pos scale", 0.1, 4.0, 0.1, position_scale)
     ori_scale_gui = server.gui.add_slider("ori scale", 0.0, 2.0, 0.1, orientation_scale)
     reengage_btn = server.gui.add_button("re-engage (clutch)")
     status = server.gui.add_markdown("")
 
-    def leader_joint_dict() -> dict[str, float]:
-        return {n: s.value for n, s in joint_sliders.items()}
+    def read_leader() -> tuple[dict[str, float], float]:
+        """Current leader joints (rad) + gripper [0,1], from device or sliders."""
+        if leader_dev is not None:
+            st = leader_dev.get_state()
+            return st.joint_positions, st.gripper
+        return {n: s.value for n, s in joint_sliders.items()}, gripper_slider.value
 
     # --- initial engage ----------------------------------------------------
     state = {"q_arm": follower_home.copy(), "reengage": True}
@@ -144,41 +165,45 @@ def run_viser(
     def _(_) -> None:
         state["reengage"] = True
 
+    ljd0, grip0 = read_leader()
     if leader_vis is not None:
-        leader_vis.update_cfg(reorder(leader_joint_dict(), leader_vis_names))
-    update_follower(
-        pipeline.jmap.to_full(follower_home, follower_kin.rest_pose()), gripper_slider.value
-    )
+        leader_vis.update_cfg(reorder(ljd0, leader_vis_names))
+    update_follower(pipeline.jmap.to_full(follower_home, follower_kin.rest_pose()), grip0)
     target_frame = server.scene.add_frame("/follower_base/ee_target", axes_length=0.1, axes_radius=0.004)
 
-    print(f"[viz] serving at http://localhost:{port}  (leader={leader_robot}, follower={follower_robot})")
+    print(f"[viz] serving at http://localhost:{port}  (leader={leader_robot}/{src}, "
+          f"follower={follower_robot})")
 
     period = 1.0 / rate_hz if rate_hz > 0 else 0.0
-    while True:
-        ljd = leader_joint_dict()
-        pipeline.retargeter.position_scale = pos_scale_gui.value
-        pipeline.retargeter.orientation_scale = ori_scale_gui.value
+    try:
+        while True:
+            ljd, grip = read_leader()
+            pipeline.retargeter.position_scale = pos_scale_gui.value
+            pipeline.retargeter.orientation_scale = ori_scale_gui.value
 
-        if state["reengage"]:
-            pipeline.engage(ljd, state["q_arm"])
-            state["reengage"] = False
+            if state["reengage"]:
+                pipeline.engage(ljd, state["q_arm"])
+                state["reengage"] = False
 
-        out = pipeline.step(ljd, state["q_arm"])
-        state["q_arm"] = out.follower_q_arm  # perfect (kinematic) tracking
+            out = pipeline.step(ljd, state["q_arm"])
+            state["q_arm"] = out.follower_q_arm  # perfect (kinematic) tracking
 
-        # update robots
-        if leader_vis is not None:
-            leader_vis.update_cfg(reorder(ljd, leader_vis_names))
-        update_follower(out.follower_q_full, gripper_slider.value)
-        # update target frame (expressed in follower base frame)
-        tp = out.follower_target_pose
-        target_frame.position = tuple(tp.position)
-        target_frame.wxyz = tuple(tp.wxyz)
+            if leader_vis is not None:
+                leader_vis.update_cfg(reorder(ljd, leader_vis_names))
+            update_follower(out.follower_q_full, grip)
+            tp = out.follower_target_pose
+            target_frame.position = tuple(tp.position)
+            target_frame.wxyz = tuple(tp.wxyz)
 
-        lp = out.leader_pose.position
-        status.content = (
-            f"leader EE: [{lp[0]:.3f}, {lp[1]:.3f}, {lp[2]:.3f}]  "
-            f"follower target: [{tp.position[0]:.3f}, {tp.position[1]:.3f}, {tp.position[2]:.3f}]"
-        )
-        if period:
-            time.sleep(period)
+            lp = out.leader_pose.position
+            status.content = (
+                f"leader EE: [{lp[0]:.3f}, {lp[1]:.3f}, {lp[2]:.3f}]  "
+                f"follower target: [{tp.position[0]:.3f}, {tp.position[1]:.3f}, {tp.position[2]:.3f}]"
+            )
+            if period:
+                time.sleep(period)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        if leader_dev is not None:
+            leader_dev.disconnect()
