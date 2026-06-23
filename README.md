@@ -4,6 +4,8 @@ Kinematics-based teleoperation: drive a **follower robot** from a **LeRobot SO-1
 leader arm, recording multi-camera RealSense streams + robot state to **HDF5**
 (convertible to LeRobot v2.1 / v3.0 datasets).
 
+![lerobot_anyteleop system overview](assets/images/lerobot_anyteleop.png)
+
 Followers are pluggable — **xArm7**, **Franka Panda / FR3**, and **UR5e** ship in
 the box, and adding another arm is a registry entry + a small driver.
 
