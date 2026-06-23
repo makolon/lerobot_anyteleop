@@ -22,6 +22,12 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--gripper-mount", type=float, nargs=6, default=None,
                    metavar=("X", "Y", "Z", "R", "P", "Y"),
                    help="Flange->gripper mount offset (m + rad) for mounted grippers.")
+    p.add_argument("--leader-port", default=None,
+                   help="Serial port of the REAL SO-101 leader (e.g. /dev/ttyACM0). "
+                        "If omitted, the leader is driven by GUI sliders.")
+    p.add_argument("--leader-id", default="so101_leader", help="SO-101 calibration id.")
+    p.add_argument("--calibrate", action="store_true",
+                   help="Run the SO-101 calibration routine on connect.")
     p.add_argument("--host", default="0.0.0.0")
     p.add_argument("--port", type=int, default=8080)
     args = p.parse_args(argv)
@@ -37,6 +43,9 @@ def main(argv: list[str] | None = None) -> int:
         gripper_model=args.gripper_model,
         gripper_mount_xyz=tuple(mount[:3]) if mount else None,
         gripper_mount_rpy=tuple(mount[3:]) if mount else None,
+        leader_port=args.leader_port,
+        leader_id=args.leader_id,
+        leader_calibrate=args.calibrate,
         host=args.host,
         port=args.port,
     )
