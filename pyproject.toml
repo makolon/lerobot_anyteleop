@@ -84,6 +84,10 @@ lerobot = { version = ">=0.1", extras = ["feetech"] }
 pyrealsense2 = ">=2.54"
 [tool.pixi.feature.hardware.target.osx-arm64.pypi-dependencies]
 pyrealsense2-macosx = ">=2.54"
+# Prebuilt conda-forge evdev (lerobot's Linux input dep) — the PyPI sdist fails to
+# compile against older kernel headers.
+[tool.pixi.feature.hardware.target.linux-64.dependencies]
+evdev = "*"
 
 # per-follower driver features.
 # xArm-Python-SDK is pure Python (cross-platform). ur_rtde and panda-python only
@@ -111,6 +115,10 @@ pyRobotiqGripper = ">=3.0"
 # no follower hardware.
 [tool.pixi.feature.leader.pypi-dependencies]
 lerobot = { version = ">=0.1", extras = ["feetech"] }
+# lerobot pulls `evdev` (Linux only); its PyPI sdist fails to compile against older
+# kernel headers, so use the prebuilt conda-forge binary instead.
+[tool.pixi.feature.leader.target.linux-64.dependencies]
+evdev = "*"
 
 [tool.pixi.feature.convert.pypi-dependencies]
 opencv-python = ">=4.8"
