@@ -7,6 +7,8 @@ import pytest
 pytest.importorskip("yourdfpy")
 pytest.importorskip("robot_descriptions")
 
+import numpy as np  # noqa: E402
+
 from lerobot_anyteleop.robots import get_robot_spec  # noqa: E402
 from lerobot_anyteleop.viz.gripper_visual import (  # noqa: E402
     finger_targets,
@@ -50,3 +52,20 @@ def test_xarm_native_is_combined():
     assert "drive_joint" in fv.finger_joints
     assert len(fv.arm_urdf.scene.geometry) > 10  # arm + gripper meshes
     assert "drive_joint" in fv.arm_urdf.actuated_joint_names
+
+
+def test_mount_default_per_arm():
+    # UR tool0 needs no correction; xArm flange gets a yaw correction.
+    ur = _try(lambda: resolve_follower_visual(get_robot_spec("ur5e"), "robotiq_2f85"))
+    xa = _try(lambda: resolve_follower_visual(get_robot_spec("xarm7"), "robotiq_2f85"))
+    assert np.allclose(ur.mount_offset.wxyz, [1.0, 0.0, 0.0, 0.0], atol=1e-9)
+    assert not np.allclose(xa.mount_offset.wxyz, [1.0, 0.0, 0.0, 0.0], atol=1e-3)
+
+
+def test_panda_robotiq_strips_franka_hand():
+    fv = _try(lambda: resolve_follower_visual(get_robot_spec("panda"), "robotiq_2f85"))
+    assert not fv.combined and fv.gripper_urdf is not None
+    # the built-in Franka Hand is removed so it doesn't double up with the Robotiq
+    assert "panda_hand" not in fv.arm_urdf.link_map
+    assert "panda_leftfinger" not in fv.arm_urdf.link_map
+    assert "finger_joint" in fv.finger_joints  # Robotiq's joint

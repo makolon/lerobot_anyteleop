@@ -86,10 +86,11 @@ src/lerobot_anyteleop/
     camera/   {base, realsense, manager}     # RealSense D435 (lazy import)
   recording/hdf5_recorder.py # incremental, resizable, compressed HDF5
   config.py / factory.py     # YAML config -> kinematics/devices/system
-  viz/viser_app.py           # interactive visualization
+  viz/ {viser_app, gripper_visual}  # interactive visualization + gripper mounting
   cli/                       # anyteleop, -viz, -list-cameras, -fetch-urdf, -inspect, -convert
 configs/ {xarm7,panda,ur5e}.yaml
 assets/urdf/so101/           # vendored SO-101 URDF (meshes via anyteleop-fetch-urdf)
+assets/urdf/grippers/        # vendored gripper URDFs + meshes (Robotiq 2F-85)
 tests/
 ```
 
@@ -165,13 +166,20 @@ backend needs UR's standalone `robotiq_gripper.py` vendored (it is not a pip
 package); the `serial` backend uses `pyRobotiqGripper`.
 
 **Visualization** of the gripper (in `anyteleop-viz`) is separate from the
-command driver and selected with `--gripper-model` (see above). The gripper is
-either part of the arm URDF (xArm rendered with its gripper; Franka Hand in
-`panda_description`) or a separate URDF mounted at the flange (Robotiq 2F-85 from
-`robot_descriptions`), and is animated by the gripper slider. To visualize a
-non-default gripper on the Franka arm (e.g. a Robotiq), pass
-`--gripper-model robotiq_2f85` — note the built-in Franka Hand still renders
-unless you also point `follower.urdf` at a hand-less Panda description.
+command driver and selected with `--gripper-model`. The gripper is either part of
+the arm URDF (xArm rendered with its gripper; Franka Hand in `panda_description`)
+or a separate URDF mounted at the flange, animated by the gripper slider. The
+Robotiq 2F-85 is **vendored** (editable) under
+`assets/urdf/grippers/robotiq_2f85/`.
+
+Two editable tables in `viz/gripper_visual.py` make mounting correct across arms:
+
+* `GRIPPER_MOUNTS` — per-arm flange→gripper transform. UR's `tool0` needs none;
+  xArm `link_eef` and the Panda flange are rotated 90° about yaw vs it, so mounted
+  grippers get a yaw correction there (flip the sign if yours points the other
+  way, or override per run with `--gripper-mount X Y Z R P Y`).
+* `STRIP_ON_MOUNT` — arm links hidden when a separate gripper is mounted; e.g.
+  Panda + Robotiq drops the built-in Franka Hand so the two don't double up.
 
 ## Recorded HDF5 schema
 

@@ -46,8 +46,8 @@ def run_viser(
     follower_offset: float = 0.8,
     show_leader: bool = True,
     gripper_model: str | None = None,           # None -> default per follower
-    gripper_mount_xyz=(0.0, 0.0, 0.0),
-    gripper_mount_rpy=(0.0, 0.0, 0.0),
+    gripper_mount_xyz=None,                      # None -> per-arm default (GRIPPER_MOUNTS)
+    gripper_mount_rpy=None,
     host: str = "0.0.0.0",
     port: int = 8080,
     rate_hz: float = 30.0,

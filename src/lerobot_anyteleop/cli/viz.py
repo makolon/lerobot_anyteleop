@@ -26,7 +26,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--port", type=int, default=8080)
     args = p.parse_args(argv)
 
-    mount = args.gripper_mount or [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+    mount = args.gripper_mount
     run_viser(
         follower_robot=args.follower,
         leader_robot=args.leader,
@@ -35,8 +35,8 @@ def main(argv: list[str] | None = None) -> int:
         follower_offset=args.offset,
         show_leader=not args.no_leader,
         gripper_model=args.gripper_model,
-        gripper_mount_xyz=tuple(mount[:3]),
-        gripper_mount_rpy=tuple(mount[3:]),
+        gripper_mount_xyz=tuple(mount[:3]) if mount else None,
+        gripper_mount_rpy=tuple(mount[3:]) if mount else None,
         host=args.host,
         port=args.port,
     )
