@@ -83,6 +83,12 @@ pixi run -- anyteleop-viz --follower xarm7 --gripper-model /path/to/gripper.urdf
     --gripper-mount 0 0 0.01 0 0 0
 ```
 
+Example followers + grippers rendered live in viser:
+
+| xArm7 (native gripper) | UR5e + Robotiq 2F-85 | Panda + Franka Hand | Panda + Robotiq 2F-85 |
+| :---: | :---: | :---: | :---: |
+| ![xArm7 with native gripper in viser](assets/images/xArm7.png) | ![UR5e with Robotiq 2F-85 in viser](assets/images/UR5e_Robotiq2F85.png) | ![Panda with Franka Hand in viser](assets/images/Panda.png) | ![Panda with Robotiq 2F-85 in viser](assets/images/Panda_Robotiq2F85.png) |
+
 ![pipeline]: leader sliders → leader FK → retarget → follower IK → render
 
 ## Project layout
