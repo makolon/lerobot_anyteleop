@@ -125,11 +125,17 @@ class TeleopController:
         leader_qpos = np.array(
             [state.joint_positions[n] for n in s.leader.joint_names] + [state.gripper]
         )
+        # Measured follower gripper for the observation state; fall back to the
+        # commanded value when the driver can't read hardware feedback.
+        grip_meas = s.gripper.get_normalized()
+        if grip_meas is None:
+            grip_meas = state.gripper
         data: dict[str, object] = {
             "observation/leader_qpos": leader_qpos,
             "observation/leader_ee_pose": out.leader_pose.as_pos_quat(),
             "observation/follower_qpos": q_meas,
             "observation/follower_ee_pose": measured_pose.as_pos_quat(),
+            "observation/gripper": np.array([grip_meas]),
             "action/follower_qpos": out.follower_q_arm,
             "action/follower_ee_pose": out.follower_target_pose.as_pos_quat(),
             "action/gripper": np.array([state.gripper]),

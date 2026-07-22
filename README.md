@@ -213,13 +213,14 @@ One `episode_XXXXXX.hdf5` per episode (datasets grow per step):
 |---|---|---|---|
 | `/observation/follower_qpos` | `(T, N)` | f32 | measured follower joints (rad) |
 | `/observation/follower_ee_pose` | `(T,7)` | f32 | `[x,y,z, qw,qx,qy,qz]` |
+| `/observation/gripper` | `(T,1)` | f32 | measured gripper `[0,1]` (commanded fallback) |
 | `/observation/leader_qpos` | `(T,6)` | f32 | 5 arm joints + gripper |
 | `/observation/leader_ee_pose` | `(T,7)` | f32 | leader EE pose |
 | `/observation/images/<cam>` | `(T,H,W,3)` | u8 | RGB (gzip, per-frame chunks) |
 | `/observation/depth/<cam>` | `(T,H,W)` | u16 | optional |
 | `/action/follower_qpos` | `(T, N)` | f32 | commanded joints (the action) |
 | `/action/follower_ee_pose` | `(T,7)` | f32 | retargeted EE target |
-| `/action/gripper` | `(T,1)` | f32 | normalized gripper |
+| `/action/gripper` | `(T,1)` | f32 | normalized gripper command |
 | `/timestamp` | `(T,)` | f64 | seconds since episode start |
 
 `N` = follower arm DOF (7 xArm7/Panda, 6 UR5e). Attributes store `fps`, `task`
@@ -236,10 +237,14 @@ anyteleop-convert --input-dir data/recordings --dry-run     # inspect the mappin
 pixi run -e xarm anyteleop-convert --input-dir data/recordings --repo-id local/anyteleop
 ```
 
-Mapping: `observation.state ← follower_qpos`, `action ← action/follower_qpos`,
+Mapping: `observation.state ← follower_qpos (+ observation/gripper)`,
+`action ← action/follower_qpos (+ action/gripper)`,
 `observation.images.<cam> ← images/<cam>`, and the per-episode `task` attribute
-becomes each frame's language instruction. The LeRobot dataset API changed across
-v2.x/v3.0, so the write path is a version-flagged best-effort scaffold; the
+becomes each frame's language instruction. **The gripper is appended as a trailing
+dimension (named `gripper`) to both `observation.state` and `action`** so trained
+policies (ACT / Diffusion Policy / pi0.5 / MolmoAct) can actually open/close it —
+pass `--no-gripper` for the old arm-only mapping. The LeRobot dataset API changed
+across v2.x/v3.0, so the write path is a version-flagged best-effort scaffold; the
 `--dry-run` mapping is stable. See `cli/convert_to_lerobot.py`.
 
 ## Hardware notes / things to verify on a real rig

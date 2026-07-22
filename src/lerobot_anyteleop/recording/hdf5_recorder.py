@@ -9,13 +9,14 @@ Layout (keys are whatever you pass to ``add_step``; the controller uses)::
 
     /observation/follower_qpos     (T, 7)   float32   measured joint angles (rad)
     /observation/follower_ee_pose  (T, 7)   float32   [x,y,z, qw,qx,qy,qz]
+    /observation/gripper           (T, 1)   float32   measured gripper [0,1] (commanded fallback)
     /observation/leader_qpos       (T, 6)   float32   5 arm joints + gripper
     /observation/leader_ee_pose    (T, 7)   float32
     /observation/images/<cam>      (T,H,W,3) uint8    RGB
     /observation/depth/<cam>       (T,H,W)  uint16    (optional)
     /action/follower_qpos          (T, 7)   float32   commanded joint target (the action)
     /action/follower_ee_pose       (T, 7)   float32   retargeted EE target
-    /action/gripper                (T, 1)   float32
+    /action/gripper                (T, 1)   float32   commanded gripper [0,1]
     /timestamp                     (T,)     float64
 
 This mirrors the common ALOHA-style HDF5 convention, which converts cleanly to
