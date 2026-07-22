@@ -35,6 +35,16 @@ class GripperInterface(abc.ABC):
     def set_normalized(self, value: float) -> None:
         ...
 
+    def get_normalized(self) -> float | None:
+        """Measured gripper opening in ``[0, 1]`` (1 = open), or ``None`` if the
+        driver can't read hardware feedback.
+
+        Used to record a real gripper *state* on the observation side. Drivers that
+        can query their position (e.g. the xArm gripper) override this; the default
+        returns ``None`` and the recorder falls back to the commanded value.
+        """
+        return None
+
     @staticmethod
     def _clamp01(value: float) -> float:
         return 0.0 if value < 0.0 else 1.0 if value > 1.0 else float(value)
