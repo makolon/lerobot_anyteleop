@@ -1,0 +1,61 @@
+<?xml version="1.0"?>
+<!--
+  Mesh-free kinematic model of the FANUC CRX-10iA/L.
+
+  Joint origins, axes and limits are taken from ws_fanuc's flattened
+  fanuc_crx_description crx10ia_l macro.  This deliberately is NOT the shorter
+  CRX-10iA model: the /L has a 0.710 m J2->J3 offset and different J1/J3 limits.
+  Geometry below is schematic and must not be used for collision checking.
+-->
+<robot name="crx10ia_l">
+  <material name="fanuc_green"><color rgba="0.45 0.82 0.42 1"/></material>
+
+  <link name="base_link">
+    <visual><origin xyz="0 0 0.12"/><geometry><cylinder radius="0.16" length="0.24"/></geometry><material name="fanuc_green"/></visual>
+  </link>
+  <link name="J1_link"><visual><geometry><cylinder radius="0.12" length="0.18"/></geometry><material name="fanuc_green"/></visual></link>
+  <link name="J2_link">
+    <visual><origin xyz="0 0 0.355"/><geometry><box size="0.14 0.14 0.71"/></geometry><material name="fanuc_green"/></visual>
+  </link>
+  <link name="J3_link"><visual><geometry><sphere radius="0.11"/></geometry><material name="fanuc_green"/></visual></link>
+  <link name="J4_link">
+    <visual><origin xyz="0.27 0 0"/><geometry><box size="0.54 0.11 0.11"/></geometry><material name="fanuc_green"/></visual>
+  </link>
+  <link name="J5_link"><visual><origin xyz="0 -0.075 0"/><geometry><box size="0.10 0.15 0.10"/></geometry><material name="fanuc_green"/></visual></link>
+  <link name="J6_link"><visual><origin xyz="0.08 0 0"/><geometry><cylinder radius="0.07" length="0.16"/></geometry><material name="fanuc_green"/></visual></link>
+
+  <joint name="J1" type="revolute">
+    <origin xyz="0 0 0.245" rpy="0 0 0"/><parent link="base_link"/><child link="J1_link"/>
+    <axis xyz="0 0 1"/><limit effort="400" lower="-3.139847324337799" upper="3.139847324337799" velocity="2.0943951023931953"/>
+  </joint>
+  <joint name="J2" type="revolute">
+    <origin xyz="0 0 0" rpy="0 0 0"/><parent link="J1_link"/><child link="J2_link"/>
+    <axis xyz="0 1 0"/><limit effort="400" lower="-3.139847324337799" upper="3.139847324337799" velocity="2.0943951023931953"/>
+  </joint>
+  <joint name="J3" type="revolute">
+    <origin xyz="0 0 0.710" rpy="0 0 0"/><parent link="J2_link"/><child link="J3_link"/>
+    <axis xyz="0 -1 0"/><limit effort="200" lower="-4.71238898038469" upper="4.71238898038469" velocity="3.141592653589793"/>
+  </joint>
+  <joint name="J4" type="revolute">
+    <origin xyz="0 0 0" rpy="0 0 0"/><parent link="J3_link"/><child link="J4_link"/>
+    <axis xyz="-1 0 0"/><limit effort="60" lower="-3.3161255787892263" upper="3.3161255787892263" velocity="3.141592653589793"/>
+  </joint>
+  <joint name="J5" type="revolute">
+    <origin xyz="0.540 0 0" rpy="0 0 0"/><parent link="J4_link"/><child link="J5_link"/>
+    <axis xyz="0 -1 0"/><limit effort="60" lower="-3.139847324337799" upper="3.139847324337799" velocity="3.141592653589793"/>
+  </joint>
+  <joint name="J6" type="revolute">
+    <origin xyz="0 -0.150 0" rpy="0 0 0"/><parent link="J5_link"/><child link="J6_link"/>
+    <axis xyz="-1 0 0"/><limit effort="60" lower="-3.9269908169872414" upper="3.9269908169872414" velocity="3.141592653589793"/>
+  </joint>
+
+  <link name="flange"/>
+  <joint name="J6-flange" type="fixed">
+    <origin xyz="0.160 0 0" rpy="0 0 0"/><parent link="J6_link"/><child link="flange"/>
+  </joint>
+  <link name="fanuc_flange"/>
+  <joint name="flange-fanuc_flange" type="fixed">
+    <origin xyz="0 0 0" rpy="3.141592653589793 -1.5707963267948966 0"/>
+    <parent link="flange"/><child link="fanuc_flange"/>
+  </joint>
+</robot>

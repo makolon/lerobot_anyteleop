@@ -6,8 +6,9 @@ leader arm, recording multi-camera RealSense streams + robot state to **HDF5**
 
 ![lerobot_anyteleop system overview](assets/images/lerobot_anyteleop.png)
 
-Followers are pluggable — **xArm7**, **Franka Panda / FR3**, and **UR5e** ship in
-the box, and adding another arm is a registry entry + a small driver.
+Followers are pluggable — **xArm7**, **Franka Panda / FR3**, and **UR5e** ship
+in the box. An experimental **FANUC CRX-10iA/L** adapter is also included;
+adding another arm is a registry entry + a small driver.
 
 ## How it works
 
@@ -22,7 +23,7 @@ SO-101 leader joints ──FK(pyroki)──▶ leader EE pose
                                           ▼
 follower joints ◀──IK(pyroki)── follower EE target ◀── applied on the follower anchor
         │
-        ├─▶ stream joint servo (xArm set_servo_angle_j / UR servoJ / Panda JointPosition)
+        ├─▶ stream joint servo (xArm / UR / Panda, or FANUC ws_fanuc stream_executor)
         └─▶ record: joints + EE poses + RealSense frames ──▶ HDF5
 ```
 
@@ -96,7 +97,7 @@ Example followers + grippers rendered live in viser:
 ```
 src/lerobot_anyteleop/
   transforms.py            # NumPy SE(3)/SO(3) math + Pose (no JAX)
-  robots/registry.py       # RobotSpec registry: so101, xarm7, panda, ur5e
+  robots/registry.py       # RobotSpec registry: so101, xarm7, panda, ur5e, crx10ia_l
   joint_utils.py           # JointMap (arm <-> full), name-based reorder
   kinematics/              # pyroki FK/IK behind a KinematicsModel ABC
   retargeting/             # PoseRetargeter (6-DOF delta scaling)
@@ -105,14 +106,14 @@ src/lerobot_anyteleop/
     controller.py          # real-hardware control loop
   devices/
     leader/   {base, so101}                  # SO-101 via lerobot (lazy import)
-    follower/ {base, xarm7, ur, franka}      # follower drivers, selected by backend
+    follower/ {base, xarm7, ur, franka, fanuc} # follower drivers, selected by backend
     gripper/  {base, none, xarm, robotiq, franka}  # pluggable grippers (normalized [0,1])
     camera/   {base, realsense, manager}     # RealSense D435 (lazy import)
   recording/hdf5_recorder.py # incremental, resizable, compressed HDF5
   config.py / factory.py     # YAML config -> kinematics/devices/system
   viz/ {viser_app, gripper_visual}  # interactive visualization + gripper mounting
   cli/                       # anyteleop, -viz, -list-cameras, -fetch-urdf, -inspect, -convert
-configs/ {xarm7,panda,ur5e}.yaml
+configs/ {xarm7,panda,ur5e,crx10ia_l}.yaml
 assets/urdf/so101/           # vendored SO-101 URDF (meshes via anyteleop-fetch-urdf)
 assets/urdf/grippers/        # vendored gripper URDFs + meshes (Robotiq 2F-85)
 tests/
@@ -130,6 +131,7 @@ pixi run viz                 # visualize SO-101 -> xArm7
 pixi install -e xarm         #  xArm7  (xArm-Python-SDK)
 pixi install -e ur           #  UR5e   (ur_rtde)
 pixi install -e franka       #  Panda  (panda-python; needs RT kernel + FCI)
+pixi install -e fanuc        #  CRX-10iA/L + direct USB/RS-485 Robotiq
 
 pixi run -e xarm anyteleop-list-cameras               # discover RealSense serials
 # edit configs/xarm7.yaml (leader port, robot ip, serials), then:
@@ -137,6 +139,161 @@ pixi run -e xarm anyteleop --config configs/xarm7.yaml --record --task "pick up 
 # collect several episodes, prompting for a language instruction before each:
 pixi run -e xarm anyteleop --config configs/xarm7.yaml --record --episodes 20
 ```
+
+## FANUC CRX-10iA/L + Robotiq 2F-140
+
+**Status:** this is an experimental integration implemented against the local
+`ws_fanuc` `master` at `309a81aa2468`. Its kinematics and message contract have
+ROS-independent test coverage, but no command was sent to a real CRX or 2F-140
+while developing it. Validate ROS message/QoS compatibility, joint signs/zeros,
+and motion direction on your exact cell before enabling Cartesian operation.
+
+The FANUC backend targets Ubuntu 24.04 / ROS 2 Jazzy and reuses the existing
+`ws_fanuc` physical stack. It does not attempt to publish 500 Hz commands from
+the Python camera/recording loop:
+
+```text
+SO-101 -> anyteleop IK (30 Hz) -> /stream_executor/joint_trajectory
+       -> fanuc_stream_executor C++ (500 Hz + position/velocity/acceleration clamps)
+       -> forward_position_controller -> FANUC Stream Motion
+                         ^
+                  safety_supervisor
+```
+
+The included model is specifically **CRX-10iA/L**. Do not substitute
+`robot_model:=crx10ia`: the /L has a different second-link length and different
+J1/J3 limits.
+
+Before enabling motion, verify `echo $ROS_DISTRO` prints `jazzy`. This path
+requires FANUC ROS 2 Driver v2.0.0 or later. On an R-30iB Mini Plus, FANUC
+documents V9.40P/77 as the base driver minimum, while the forward-position
+controller used here requires V9.40P/84 or later.
+The controller also needs J519 Stream Motion + R912 Remote Motion, or the S636
+External Control Package. See FANUC's [system requirements](https://fanuc-corporation.github.io/fanuc_driver_doc/main/docs/environment/system_requirements.html)
+and [feature/version table](https://fanuc-corporation.github.io/fanuc_driver_doc/main/docs/fanuc_driver/fanuc_driver_overview.html).
+
+Build and source `ws_fanuc`, then start its physical stack in a separate terminal:
+
+```bash
+source /opt/ros/jazzy/setup.bash
+cd /path/to/ws_fanuc
+rosdep install -iyr --from-paths src easy_handeye2 ros2_aruco
+colcon build --cmake-args -DBUILD_TESTING=1 -DBUILD_EXAMPLES=1
+source install/setup.bash
+
+ros2 launch fanuc_stream_control stream_physical.launch.py \
+  robot_model:=crx10ia_l robot_ip:=192.168.1.100 \
+  setpoint_source:=waypoints join_enabled:=false require_supervisor:=true
+```
+
+The PC Ethernet NIC directly connected to the controller must have a unique
+address in the same subnet (for example, robot `192.168.1.100`, PC
+`192.168.1.10/24`). Confirm the actual address and `ping 192.168.1.100` before
+launching; the `robot_ip` launch argument is the connection authority.
+
+Keep `require_supervisor:=true`, retain the explicit `waypoints`/`join_enabled`
+arguments shown above, and do not relax the other physical-launch safety
+defaults. Confirm that the executor advances, then resume only after inspecting
+the cell:
+
+```bash
+ros2 topic echo /stream_executor/status --once  # inspect period_p99_us / period_max_us
+ros2 topic echo /stream_executor/status --field tick_seq  # observe multiple increasing values
+ros2 topic echo /safety_supervisor/state --once
+ros2 param get /stream_executor robot_model       # must be: crx10ia_l
+ros2 param get /stream_executor publish_rate_hz   # must be: 500.0
+ros2 param get /stream_executor join_enabled      # must be: false
+ros2 param get /stream_executor setpoint_source   # must be: waypoints
+ros2 param get /stream_executor require_supervisor # must be: true
+ros2 service call /safety_supervisor/resume std_srvs/srv/Trigger '{}'
+```
+
+In a second sourced terminal, edit the leader/gripper ports in
+[`configs/crx10ia_l.yaml`](configs/crx10ia_l.yaml). Its `follower.ip` is only
+deployment metadata; keep it equal to the launch argument, which owns the real
+connection. The Pixi environment supplies application dependencies, while
+`rclpy` and `fanuc_stream_msgs` come from the sourced system ROS/workspace:
+
+```bash
+source /opt/ros/jazzy/setup.bash
+source /path/to/ws_fanuc/install/setup.bash
+pixi install -e fanuc
+pixi run -e fanuc python -c \
+  'import rclpy; from fanuc_stream_msgs.msg import StreamStatus, SupervisorState'
+pixi run -e fanuc anyteleop --config configs/crx10ia_l.yaml
+```
+
+The sample uses PC -> USB/RS-485 adapter -> gripper Modbus RTU
+(`pyRobotiqGripper`, slave ID 9), not raw USB and not FANUC I/O. Follow the
+Robotiq manual for its 24 V supply and wiring, allow only one Modbus master,
+grant the user serial access (commonly the `dialout` group), and prefer a stable
+`/dev/serial/by-id/...` path over `/dev/ttyUSB0`. If the 2F-140 is wired to the
+FANUC controller instead, this serial backend does not apply: configure
+`gripper.type: none` and operate `ws_fanuc`'s `/gripper/close` + F[91]/F[92]
+bridge separately, or first implement a ROS gripper backend to couple it to the
+SO-101 command.
+`activate_on_connect: true` performs the gripper's activation sweep, so clear
+the fingers and workspace before starting; set it to `false` only when the
+gripper has already been activated for the current power cycle.
+
+The adapter repeats these executor-parameter checks itself before the first
+motion. It rejects missing/reordered-invalid/non-finite state, stale
+joint/executor/supervisor data, non-RUN safety state, joint-limit violations,
+discontinuous IK steps, and targets that run too far ahead of the executor's
+actual command. It also applies anyteleop admission thresholds to the 500 Hz
+executor (period p99 <= 2.4 ms, max <= 6 ms). If these fail, fix kernel/CPU load
+or real-time scheduling rather than merely relaxing the thresholds. Homing is
+sent as a speed-scale-aware rolling sequence of small
+targets, not as one long unattended trajectory, and an asynchronous stop
+cancels all later home waypoints. A dedicated local watchdog freezes the fresh
+executor setpoint if Python setpoints stall. This leaves the supervisor and
+STREAM_MOTN armed; it is a best-effort setpoint stop, not a supervisor HOLD or
+emergency stop. A SIGKILL/power failure can also kill that watchdog; the final
+outstanding target remains lead-bounded but is not guaranteed to be zero-motion.
+Guarded operation, the hardware E-stop, and an independent operator dead-man
+therefore remain required.
+
+`ws_fanuc` interprets each one-point teleoperation message as a hold, so its
+plan-time scaling does not slow that message. The adapter therefore applies the
+fresh executor `speed_scale` to its own elapsed-time-normalized joint-step
+ceiling before publishing. This is a conservative speed ceiling rather than a
+queued time-stretched path; it avoids leaving a long trajectory behind if the
+Python process disappears. The HDF5 joint/EE action records the scaled target
+actually sent, not the unscaled IK request.
+
+`home_timeout_s` is an absolute wall-clock limit, not speed-scaled. At a very
+low collaborative `speed_scale`, homing can intentionally fail after 120 s;
+at scale zero it only refreshes the current hold until that timeout.
+
+`anyteleop` automatically moves to the configured home
+`[0, 0, 0, 0, -pi/2, 0]` before every episode. The bundled URDF uses
+joint-frame dimensions/axes copied from the pinned `ws_fanuc` model, but its
+geometry is only schematic and the real joint signs/zeros remain unverified:
+there is no collision/self-collision checking. Clear and inspect the entire
+swept volume first. Keep the FANUC
+TP/general override at the value required by Stream Motion (normally 100%);
+commission slowly with `home_speed_rad_s`, `position_scale`,
+`orientation_scale`, `velocity_safety_factor`, and the controller's approved
+collaborative-safety settings instead of lowering general override.
+
+Preview the local /L kinematics before connecting hardware:
+
+```bash
+pixi run -- anyteleop-viz --follower crx10ia_l --no-leader
+```
+
+Start arm-only commissioning with `gripper.type: none`. Before even the first
+automatic home with the gripper mounted, configure and validate the complete
+gripper/adapter/workpiece payload, center of gravity, and inertia in the FANUC
+controller.
+
+IK currently targets the bare `fanuc_flange`; the 2F-140 adapter and TCP offset
+are not part of the URDF. Setting FANUC UTOOL alone does **not** correct the
+external anyteleop IK. Tool-tip Cartesian teleoperation remains unsupported
+until the measured flange-to-TCP fixed transform is added to this URDF, the
+robot spec/config selects that TCP link as `follower.ee_link`, and the matching
+UTOOL is verified. After a run, use the cell's approved procedure to disarm
+remote motion; exiting this Python process alone does not disarm STREAM_MOTN.
 
 Each recorded episode carries a **language instruction** (LeRobot's per-episode
 `task`). Provide it with `--task` (reused for every episode), or omit it and the
@@ -157,6 +314,10 @@ session (re-homing between). Ctrl-C ends the current episode.
    name or a path — EE link, `arm_joint_names`, `home`, default `follower_backend`).
 2. Add a driver in `devices/follower/` implementing `FollowerInterface` and
    register it in `devices/follower/__init__.py`.
+
+Custom follower drivers must also implement an idempotent `stop()` that is safe
+before connection and after a previous stop; the controller invokes it on normal
+completion, Ctrl-C, and control-loop exceptions.
 
 Kinematics, retargeting, recording, and the viser app then work unchanged.
 
@@ -217,8 +378,8 @@ One `episode_XXXXXX.hdf5` per episode (datasets grow per step):
 | `/observation/leader_ee_pose` | `(T,7)` | f32 | leader EE pose |
 | `/observation/images/<cam>` | `(T,H,W,3)` | u8 | RGB (gzip, per-frame chunks) |
 | `/observation/depth/<cam>` | `(T,H,W)` | u16 | optional |
-| `/action/follower_qpos` | `(T, N)` | f32 | commanded joints (the action) |
-| `/action/follower_ee_pose` | `(T,7)` | f32 | retargeted EE target |
+| `/action/follower_qpos` | `(T, N)` | f32 | joint target actually sent (the action) |
+| `/action/follower_ee_pose` | `(T,7)` | f32 | FK pose of the joint target actually sent |
 | `/action/gripper` | `(T,1)` | f32 | normalized gripper |
 | `/timestamp` | `(T,)` | f64 | seconds since episode start |
 

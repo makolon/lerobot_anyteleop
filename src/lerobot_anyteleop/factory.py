@@ -110,7 +110,9 @@ def build_follower_device(cfg: FollowerConfig, spec: RobotSpec) -> FollowerInter
     backend = cfg.backend or spec.follower_backend
     if not backend:
         raise ValueError(f"No follower backend for robot {spec.name!r}; set follower.backend.")
-    if not cfg.ip:
+    # FANUC networking is owned by the separately launched ws_fanuc driver.
+    # Keep cfg.ip as useful deployment metadata, but do not require it here.
+    if not cfg.ip and backend not in {"fanuc_ros2", "crx10ia_l"}:
         raise ValueError(f"follower.ip is required for backend {backend!r}.")
     cls = get_follower_class(backend)
     return cls(ip=cfg.ip, joint_names=spec.arm_joint_names, **cfg.options)

@@ -1,0 +1,77 @@
+# SO-101 leader -> FANUC CRX-10iA/L through ws_fanuc + direct USB/RS-485 2F-140.
+#
+# Prerequisite (separate terminal, after sourcing ROS 2 Jazzy + ws_fanuc):
+#   ros2 launch fanuc_stream_control stream_physical.launch.py \
+#     robot_model:=crx10ia_l robot_ip:=192.168.1.100 \
+#     setpoint_source:=waypoints join_enabled:=false require_supervisor:=true
+#
+# Never use robot_model:=crx10ia for the /L arm: its link length and J1/J3 limits differ.
+task: pick_and_place
+
+leader:
+  robot: so101
+  backend: so101
+  port: /dev/ttyACM0
+  arm_id: so101_leader
+  calibrate: false
+
+follower:
+  robot: crx10ia_l
+  backend: fanuc_ros2
+  # Informational here; ws_fanuc's stream_physical launch owns the connection.
+  ip: 192.168.1.100
+  options:
+    joint_states_topic: /joint_states
+    trajectory_topic: /stream_executor/joint_trajectory
+    stream_status_topic: /stream_executor/status
+    supervisor_state_topic: /safety_supervisor/state
+    state_timeout_s: 0.30
+    status_timeout_s: 0.30
+    ready_timeout_s: 10.0
+    watchdog_timeout_s: 0.25
+    # anyteleop admission thresholds for ws_fanuc's 2 ms nominal period.
+    max_period_p99_us: 2400.0
+    max_period_max_us: 6000.0
+    max_step_rad: 0.02
+    max_target_lead_rad: 0.10
+    limit_margin_rad: 0.017
+    # Nominal input period used to time-normalize max_step_rad. One-point
+    # ws_fanuc plans ignore time_from_start itself; keep loop.rate_hz near 1/value.
+    command_duration_s: 0.03333333333333333
+    home_speed_rad_s: 0.20
+    home_min_duration_s: 3.0
+    # Absolute wall time; very low executor speed_scale can intentionally hit it.
+    home_timeout_s: 120.0
+    home_tolerance_rad: 0.01
+    home_settle_s: 0.20
+    require_stream_status: true
+    require_supervisor: true
+    verify_executor_parameters: true
+    stream_node_name: /stream_executor
+  gripper:
+    type: robotiq
+    options:
+      backend: serial
+      com_port: /dev/ttyUSB0
+      speed: 128
+      force: 64
+      device_id: 9
+      activate_on_connect: true  # activation sweeps the fingers; clear the jaws first
+
+retarget:
+  # Conservative first-run values. Validate direction/scale in visualization,
+  # then tune with the real arm at reduced collaborative speed.
+  position_scale: 0.5
+  orientation_scale: 0.5
+  align_rpy: [0.0, 0.0, 0.0]
+
+# Add RealSense entries only after arm-only commissioning succeeds.
+cameras: []
+
+record:
+  output_dir: data/recordings
+  fps: 30
+
+loop:
+  rate_hz: 30
+  max_steps: null

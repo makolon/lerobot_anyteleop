@@ -2,6 +2,11 @@
 
 from __future__ import annotations
 
+import sys
+from types import SimpleNamespace
+
+import pytest
+
 from lerobot_anyteleop.devices.gripper.none import NoGripper
 from lerobot_anyteleop.devices.gripper.robotiq import RobotiqGripper
 from lerobot_anyteleop.devices.gripper.xarm import XArmGripper
@@ -69,3 +74,41 @@ def test_clamping():
 def test_default_deadbands():
     assert XArmGripper(_FakeFollower()).deadband == 0.0
     assert RobotiqGripper().deadband == 0.03
+
+
+def test_serial_backend_connects_before_activation(monkeypatch):
+    calls = []
+
+    class FakeSDKGripper:
+        def __init__(self, **kwargs):
+            calls.append(("init", kwargs))
+
+        def connect(self):
+            calls.append(("connect", None))
+
+        def activate(self):
+            calls.append(("activate", None))
+
+        def disconnect(self):
+            calls.append(("disconnect", None))
+
+        def stop(self):
+            calls.append(("stop", None))
+
+    monkeypatch.setitem(
+        sys.modules,
+        "pyrobotiqgripper",
+        SimpleNamespace(RobotiqGripper=FakeSDKGripper),
+    )
+    gripper = RobotiqGripper(com_port="/dev/ttyUSB9", device_id=9)
+    gripper.connect()
+    assert [name for name, _ in calls[:3]] == ["init", "connect", "activate"]
+    assert calls[0][1] == {"com_port": "/dev/ttyUSB9", "device_id": 9}
+    gripper.disconnect()
+    assert [name for name, _ in calls[-2:]] == ["stop", "disconnect"]
+
+
+@pytest.mark.parametrize(("option", "value"), [("speed", -1), ("force", 256), ("device_id", 0)])
+def test_robotiq_rejects_invalid_serial_parameters(option, value):
+    with pytest.raises(ValueError):
+        RobotiqGripper(**{option: value})

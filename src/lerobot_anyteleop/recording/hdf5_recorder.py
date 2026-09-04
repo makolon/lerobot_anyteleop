@@ -13,8 +13,8 @@ Layout (keys are whatever you pass to ``add_step``; the controller uses)::
     /observation/leader_ee_pose    (T, 7)   float32
     /observation/images/<cam>      (T,H,W,3) uint8    RGB
     /observation/depth/<cam>       (T,H,W)  uint16    (optional)
-    /action/follower_qpos          (T, 7)   float32   commanded joint target (the action)
-    /action/follower_ee_pose       (T, 7)   float32   retargeted EE target
+    /action/follower_qpos          (T, 7)   float32   sent joint target (the action)
+    /action/follower_ee_pose       (T, 7)   float32   FK of sent joint target
     /action/gripper                (T, 1)   float32
     /timestamp                     (T,)     float64
 

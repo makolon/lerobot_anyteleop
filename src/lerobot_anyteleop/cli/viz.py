@@ -9,7 +9,7 @@ from ..viz import run_viser
 
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument("--follower", default="xarm7", help="xarm7 | panda | ur5e")
+    p.add_argument("--follower", default="xarm7", help="xarm7 | panda | ur5e | crx10ia_l")
     p.add_argument("--leader", default="so101")
     p.add_argument("--position-scale", type=float, default=1.5)
     p.add_argument("--orientation-scale", type=float, default=1.0)

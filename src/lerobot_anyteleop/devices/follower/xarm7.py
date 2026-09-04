@@ -31,6 +31,7 @@ class XArm7Follower(FollowerInterface):
         self.ip = ip
         self.home_speed = float(home_speed)
         self._arm = None
+        self._stopped = True
 
     def connect(self) -> None:
         from xarm.wrapper import XArmAPI  # type: ignore
@@ -41,6 +42,7 @@ class XArm7Follower(FollowerInterface):
         self._arm.clean_error()
         self._arm.set_mode(0)
         self._arm.set_state(0)
+        self._stopped = False
 
     @property
     def api(self):
@@ -50,10 +52,11 @@ class XArm7Follower(FollowerInterface):
     def disconnect(self) -> None:
         if self._arm is not None:
             try:
-                self._arm.set_state(4)  # stop
+                self.stop()
             finally:
                 self._arm.disconnect()
             self._arm = None
+            self._stopped = True
 
     @property
     def is_connected(self) -> bool:
@@ -68,6 +71,7 @@ class XArm7Follower(FollowerInterface):
         q = np.asarray(q, dtype=np.float64)
         self._arm.set_mode(0)
         self._arm.set_state(0)
+        self._stopped = False
         code = self._arm.set_servo_angle(
             angle=q.tolist(), is_radian=True, speed=self.home_speed, wait=blocking
         )
@@ -76,11 +80,20 @@ class XArm7Follower(FollowerInterface):
     def enter_servo_mode(self) -> None:
         self._arm.set_mode(1)
         self._arm.set_state(0)
+        self._stopped = False
 
     def send_joint_positions(self, q: np.ndarray) -> None:
         q = np.asarray(q, dtype=np.float64)
         code = self._arm.set_servo_angle_j(q.tolist(), is_radian=True)
         self._check(code, "set_servo_angle_j")
+        self._stopped = False
+
+    def stop(self) -> None:
+        if self._arm is not None and not self._stopped:
+            code = self._arm.set_state(4)
+            if code not in (0, None):
+                raise RuntimeError(f"xArm set_state(stop) returned non-zero code {code}")
+            self._stopped = True
 
     @staticmethod
     def _check(code, what: str) -> None:

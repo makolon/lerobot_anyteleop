@@ -52,7 +52,7 @@ class GripperConfig:
 
 @dataclass
 class FollowerConfig:
-    robot: str = "xarm7"          # xarm7 | panda | ur5e | ...
+    robot: str = "xarm7"          # xarm7 | panda | ur5e | crx10ia_l | ...
     backend: str | None = None    # device driver; else robot's default backend
     urdf: str | None = None
     ee_link: str | None = None

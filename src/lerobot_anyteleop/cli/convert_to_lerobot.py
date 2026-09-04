@@ -8,7 +8,7 @@ write path to whichever ``lerobot`` version you pin.
 Default feature mapping (ALOHA-style):
 
     observation.state            <- /observation/follower_qpos   (measured joints)
-    action                       <- /action/follower_qpos        (commanded joints)
+    action                       <- /action/follower_qpos        (sent joint targets)
     observation.images.<cam>     <- /observation/images/<cam>    (video)
 
 Run ``--include-ee`` to also export EE poses as extra (non-standard) features.

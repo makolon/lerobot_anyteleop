@@ -15,7 +15,7 @@ from lerobot_anyteleop.config import FollowerConfig, LeaderConfig, RetargetConfi
 from lerobot_anyteleop.factory import build_pipeline  # noqa: E402
 from lerobot_anyteleop.robots import get_robot_spec  # noqa: E402
 
-FOLLOWERS = ["xarm7", "panda", "ur5e"]
+FOLLOWERS = ["xarm7", "panda", "ur5e", "crx10ia_l"]
 
 
 @pytest.fixture(scope="module", params=FOLLOWERS)

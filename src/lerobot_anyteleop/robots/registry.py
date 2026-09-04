@@ -18,6 +18,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 SO101_URDF = "assets/urdf/so101/so101_new_calib.urdf"
+CRX10IA_L_URDF = "assets/urdf/fanuc_crx10ia_l/crx10ia_l_kinematic.urdf"
 
 
 @dataclass(frozen=True)
@@ -79,6 +80,16 @@ ROBOTS: dict[str, RobotSpec] = {
         home=(0.0, -1.57, 1.57, -1.57, -1.57, 0.0),
         base_link="base_link",
         follower_backend="ur",
+    ),
+    "crx10ia_l": RobotSpec(
+        name="crx10ia_l",
+        urdf=CRX10IA_L_URDF,
+        ee_link="fanuc_flange",
+        arm_joint_names=("J1", "J2", "J3", "J4", "J5", "J6"),
+        # FANUC SRDF group_state "default" used by ws_fanuc.
+        home=(0.0, 0.0, 0.0, 0.0, -1.5707963267948966, 0.0),
+        base_link="base_link",
+        follower_backend="fanuc_ros2",
     ),
 }
 

@@ -16,6 +16,8 @@ FOLLOWER_BACKENDS: dict[str, str] = {
     "ur10e": "lerobot_anyteleop.devices.follower.ur:URFollower",
     "franka": "lerobot_anyteleop.devices.follower.franka:FrankaFollower",
     "panda": "lerobot_anyteleop.devices.follower.franka:FrankaFollower",
+    "fanuc_ros2": "lerobot_anyteleop.devices.follower.fanuc:FanucROS2Follower",
+    "crx10ia_l": "lerobot_anyteleop.devices.follower.fanuc:FanucROS2Follower",
 }
 
 

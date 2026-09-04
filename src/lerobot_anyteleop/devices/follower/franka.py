@@ -70,3 +70,8 @@ class FrankaFollower(FollowerInterface):
     def send_joint_positions(self, q: np.ndarray) -> None:
         q = np.asarray(q, dtype=np.float64)
         self._ctrl.set_control(q)
+
+    def stop(self) -> None:
+        if self._panda is not None and self._ctrl is not None:
+            self._panda.stop_controller()
+            self._ctrl = None

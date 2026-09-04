@@ -41,6 +41,7 @@ class URFollower(FollowerInterface):
         self.home_accel = float(home_accel)
         self._rtde_c = None
         self._rtde_r = None
+        self._stopped = True
 
     def connect(self) -> None:
         import rtde_control  # type: ignore
@@ -48,15 +49,17 @@ class URFollower(FollowerInterface):
 
         self._rtde_c = rtde_control.RTDEControlInterface(self.ip)
         self._rtde_r = rtde_receive.RTDEReceiveInterface(self.ip)
+        self._stopped = False
 
     def disconnect(self) -> None:
         if self._rtde_c is not None:
             try:
-                self._rtde_c.servoStop()
+                self.stop()
                 self._rtde_c.stopScript()
             finally:
                 self._rtde_c.disconnect()
             self._rtde_c = None
+            self._stopped = True
         if self._rtde_r is not None:
             self._rtde_r.disconnect()
             self._rtde_r = None
@@ -72,12 +75,21 @@ class URFollower(FollowerInterface):
         q = np.asarray(q, dtype=np.float64).tolist()
         # asynchronous = not blocking
         self._rtde_c.moveJ(q, self.home_speed, self.home_accel, not blocking)
+        self._stopped = False
 
     def enter_servo_mode(self) -> None:
         # servoJ is stateless; nothing to switch. (kept for interface parity)
-        pass
+        self._stopped = False
 
     def send_joint_positions(self, q: np.ndarray) -> None:
         q = np.asarray(q, dtype=np.float64).tolist()
         # speed/accel are ignored by servoJ but are required positional args.
         self._rtde_c.servoJ(q, 0.5, 0.5, self.servo_dt, self.lookahead_time, self.gain)
+        self._stopped = False
+
+    def stop(self) -> None:
+        if self._rtde_c is not None and not self._stopped:
+            result = self._rtde_c.servoStop()
+            if result is False:
+                raise RuntimeError("UR servoStop failed")
+            self._stopped = True
