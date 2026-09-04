@@ -14,7 +14,9 @@ leader:
 
 follower:
   robot: xarm7
-  ip: 192.168.1.185
+  # SINGLE-ARM: this is the xArm7 normally used for collection. `ping <ip>` must
+  # succeed and the host must be on the arm's subnet (check `ifconfig | grep "inet "`).
+  ip: 192.168.10.211
   gripper:
     type: xarm                    # xArm native gripper (shares the arm connection)
     options: { speed: 2000 }
@@ -29,8 +31,10 @@ retarget:
   align_rpy: [0.0, 0.0, 0.0]        # leader_base -> follower_base (rad)
 
 cameras:
-  - { name: top,   serial: "REPLACE_TOP_SERIAL",   width: 640, height: 480, fps: 30, enable_depth: true }
-  - { name: wrist, serial: "REPLACE_WRIST_SERIAL", width: 640, height: 480, fps: 30 }
+  # Names become the LeRobot keys observation.images.<name>. Get serials with:
+  #   pixi run -e xarm anyteleop-list-cameras
+  - { name: front_cam, serial: "REPLACE_FRONT_SERIAL", width: 640, height: 480, fps: 30, enable_depth: true }
+  - { name: wrist_cam, serial: "REPLACE_WRIST_SERIAL", width: 640, height: 480, fps: 30 }
 
 record:
   output_dir: data/recordings

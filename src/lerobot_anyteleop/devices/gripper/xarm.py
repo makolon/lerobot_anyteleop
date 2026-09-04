@@ -40,3 +40,19 @@ class XArmGripper(GripperInterface):
     def set_normalized(self, value: float) -> None:
         pos = self._clamp01(value) * XARM_GRIPPER_MAX  # 1 -> 850 (open), 0 -> 0 (closed)
         self._arm.set_gripper_position(round(pos), wait=False)
+
+    def get_normalized(self) -> float | None:
+        """Measured opening in [0,1] from ``get_gripper_position`` (0..850 pulses).
+
+        Best-effort: returns ``None`` on a non-zero SDK code or any read error so
+        the recorder can fall back to the commanded value.
+        """
+        if self._arm is None:
+            return None
+        try:
+            code, pos = self._arm.get_gripper_position()
+        except Exception:
+            return None
+        if code not in (0, None) or pos is None:
+            return None
+        return self._clamp01(float(pos) / XARM_GRIPPER_MAX)

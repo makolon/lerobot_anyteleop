@@ -7,11 +7,21 @@ write path to whichever ``lerobot`` version you pin.
 
 Default feature mapping (ALOHA-style):
 
-    observation.state            <- /observation/follower_qpos   (measured joints)
-    action                       <- /action/follower_qpos        (sent joint targets)
+    observation.state            <- /observation/follower_qpos [+ /observation/gripper]
+                                      (measured joints and gripper)
+    action                       <- /action/follower_qpos      [+ /action/gripper]
+                                      (sent joint targets and commanded gripper)
     observation.images.<cam>     <- /observation/images/<cam>    (video)
 
+The gripper is **appended** to both ``observation.state`` and ``action`` (as a
+trailing dimension named ``gripper``) whenever ``/action/gripper`` is present, so a
+policy (ACT / Diffusion Policy / pi0.5 / MolmoAct) learns to open/close it. Without
+this, the gripper command would be dropped and the arm-only vectors could never
+drive the gripper. State uses the *measured* gripper (``/observation/gripper``) when
+recorded, else falls back to the commanded value.
+
 Run ``--include-ee`` to also export EE poses as extra (non-standard) features.
+Pass ``--no-gripper`` to force the old arm-only mapping.
 """
 
 from __future__ import annotations
@@ -25,7 +35,22 @@ import numpy as np
 
 STATE_KEY = "observation/follower_qpos"
 ACTION_KEY = "action/follower_qpos"
+ACTION_GRIPPER_KEY = "action/gripper"
+OBS_GRIPPER_KEY = "observation/gripper"
 IMAGES_GROUP = "observation/images"
+
+
+def _gripper_keys(f: h5py.File, want_gripper: bool) -> tuple[bool, str | None]:
+    """Whether to append a gripper dim, and which dataset feeds the *state* gripper.
+
+    Gripper is included iff ``want_gripper`` and ``/action/gripper`` exists. The
+    state gripper prefers the measured ``/observation/gripper`` and falls back to the
+    commanded ``/action/gripper`` for older recordings that lack it.
+    """
+    if not (want_gripper and ACTION_GRIPPER_KEY in f):
+        return False, None
+    state_src = OBS_GRIPPER_KEY if OBS_GRIPPER_KEY in f else ACTION_GRIPPER_KEY
+    return True, state_src
 
 
 def _image_camera_names(f: h5py.File) -> list[str]:
@@ -44,21 +69,24 @@ def _attr(f: h5py.File, key: str, default):
     return v
 
 
-def build_features(episode_path: Path, fps: float, include_ee: bool) -> dict:
+def build_features(episode_path: Path, fps: float, include_ee: bool,
+                   want_gripper: bool = True) -> dict:
     with h5py.File(episode_path, "r") as f:
-        state_dim = f[STATE_KEY].shape[1]
-        action_dim = f[ACTION_KEY].shape[1]
-        follower_joint_names = _attr(f, "follower_joint_names", [f"j{i}" for i in range(state_dim)])
+        arm_dim = f[STATE_KEY].shape[1]
+        follower_joint_names = _attr(f, "follower_joint_names", [f"j{i}" for i in range(arm_dim)])
+        include_gripper, _ = _gripper_keys(f, want_gripper)
+        state_names = list(follower_joint_names) + (["gripper"] if include_gripper else [])
+        action_names = list(follower_joint_names) + (["gripper"] if include_gripper else [])
         features: dict = {
             "observation.state": {
                 "dtype": "float32",
-                "shape": [state_dim],
-                "names": list(follower_joint_names),
+                "shape": [len(state_names)],
+                "names": state_names,
             },
             "action": {
                 "dtype": "float32",
-                "shape": [action_dim],
-                "names": list(follower_joint_names),
+                "shape": [len(action_names)],
+                "names": action_names,
             },
         }
         for cam in _image_camera_names(f):
@@ -76,12 +104,20 @@ def build_features(episode_path: Path, fps: float, include_ee: bool) -> dict:
     return features
 
 
-def _iter_frames(f: h5py.File, cams: list[str], include_ee: bool):
+def _iter_frames(f: h5py.File, cams: list[str], include_ee: bool, want_gripper: bool = True):
     n = f[STATE_KEY].shape[0]
+    include_gripper, state_grip_src = _gripper_keys(f, want_gripper)
     for i in range(n):
+        state = np.asarray(f[STATE_KEY][i], dtype=np.float32)
+        action = np.asarray(f[ACTION_KEY][i], dtype=np.float32)
+        if include_gripper:
+            state_grip = np.asarray(f[state_grip_src][i], dtype=np.float32).reshape(-1)
+            action_grip = np.asarray(f[ACTION_GRIPPER_KEY][i], dtype=np.float32).reshape(-1)
+            state = np.concatenate([state, state_grip])
+            action = np.concatenate([action, action_grip])
         frame = {
-            "observation.state": np.asarray(f[STATE_KEY][i], dtype=np.float32),
-            "action": np.asarray(f[ACTION_KEY][i], dtype=np.float32),
+            "observation.state": state,
+            "action": action,
         }
         for cam in cams:
             frame[f"observation.images.{cam}"] = np.asarray(f[f"{IMAGES_GROUP}/{cam}"][i])
@@ -99,15 +135,19 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--fps", type=float, default=30.0)
     p.add_argument("--robot-type", default="xarm7")
     p.add_argument("--include-ee", action="store_true")
+    p.add_argument("--no-gripper", action="store_true",
+                   help="Do NOT append the gripper to state/action (old arm-only mapping).")
     p.add_argument("--dry-run", action="store_true", help="Print feature spec only; do not write.")
     args = p.parse_args(argv)
+
+    want_gripper = not args.no_gripper
 
     episodes = sorted(Path(args.input_dir).glob("episode_*.hdf5"))
     if not episodes:
         print(f"No episode_*.hdf5 found in {args.input_dir}")
         return 1
 
-    features = build_features(episodes[0], args.fps, args.include_ee)
+    features = build_features(episodes[0], args.fps, args.include_ee, want_gripper)
     print(f"Found {len(episodes)} episode(s).")
     print("Feature spec:")
     print(json.dumps(features, indent=2))
@@ -137,7 +177,7 @@ def main(argv: list[str] | None = None) -> int:
         with h5py.File(ep_path, "r") as f:
             cams = _image_camera_names(f)
             task = _attr(f, "task", "teleop")
-            for frame in _iter_frames(f, cams, args.include_ee):
+            for frame in _iter_frames(f, cams, args.include_ee, want_gripper):
                 # Newer lerobot wants task as a kwarg; older expects it inside the frame.
                 try:
                     dataset.add_frame(frame, task=task)

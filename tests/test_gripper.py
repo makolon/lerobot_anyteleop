@@ -13,8 +13,10 @@ from lerobot_anyteleop.devices.gripper.xarm import XArmGripper
 
 
 class _FakeArm:
-    def __init__(self):
+    def __init__(self, read_pos=None, read_code=0):
         self.positions = []
+        self._read_pos = read_pos
+        self._read_code = read_code
 
     def set_gripper_enable(self, *a, **k): ...
     def set_gripper_mode(self, *a, **k): ...
@@ -22,6 +24,9 @@ class _FakeArm:
 
     def set_gripper_position(self, pos, wait=False):
         self.positions.append(pos)
+
+    def get_gripper_position(self):
+        return self._read_code, self._read_pos
 
 
 class _FakeFollower:
@@ -52,6 +57,27 @@ def test_xarm_gripper_mapping():
     for v in (1.0, 0.0, 0.5):
         g.set_normalized(v)
     assert f.api.positions == [850, 0, 425]
+
+
+def test_xarm_gripper_read_normalized():
+    # 850 -> 1.0 (open), 0 -> 0.0 (closed), 425 -> 0.5
+    f = _FakeFollower()
+    g = XArmGripper(f)
+    g.connect()
+    for raw, expected in ((850, 1.0), (0, 0.0), (425, 0.5)):
+        f.api._read_pos = raw
+        assert g.get_normalized() == expected
+
+
+def test_xarm_gripper_read_falls_back_to_none_on_error():
+    f = _FakeFollower()
+    g = XArmGripper(f)
+    g.connect()
+    f.api._read_code = 1  # non-zero SDK code -> unreadable
+    f.api._read_pos = 425
+    assert g.get_normalized() is None
+    # base default (no connection) is also None
+    assert XArmGripper(_FakeFollower()).get_normalized() is None
 
 
 def test_robotiq_mapping_inverts():

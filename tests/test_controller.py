@@ -130,6 +130,12 @@ def test_controller_runs_and_records(tmp_path):
         assert f["action/follower_qpos"].shape == (6, 6)
         assert f["observation/leader_qpos"].shape == (6, 6)  # 5 arm + gripper
         assert f["observation/follower_ee_pose"].shape == (6, 7)
+        # gripper recorded on both sides (action = commanded, observation = measured
+        # with commanded fallback since FakeGripper.get_normalized() returns None)
+        assert f["action/gripper"].shape == (6, 1)
+        assert f["observation/gripper"].shape == (6, 1)
+        assert np.allclose(f["action/gripper"][:], 0.5)
+        assert np.allclose(f["observation/gripper"][:], 0.5)
         assert f.attrs["num_steps"] == 6
         # language instruction stored for LeRobot conversion
         assert f.attrs["task"] == "pick up the red cube"
